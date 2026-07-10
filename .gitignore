@@ -1,0 +1,23 @@
+# Vivado/XSim generated files
+.Xil/
+*.cache/
+*.gen/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+xsim.dir/
+
+*.jou
+*.log
+*.pb
+*.lpr
+dfx_runtime.txt
+
+# Generated implementation outputs
+*.bit
+*.bin
+*.dcp
+*.rpt
+*.str
+*.xsa
