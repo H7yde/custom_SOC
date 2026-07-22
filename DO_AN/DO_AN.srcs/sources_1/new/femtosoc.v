@@ -7,7 +7,7 @@
 `default_nettype none
 
 module femto_ram #(
-   parameter integer RAM_BYTES = 64 * 1024,
+   parameter integer RAM_BYTES = 32 * 1024,
    parameter         INIT_FILE = ""
 ) (
    input  wire        clk,

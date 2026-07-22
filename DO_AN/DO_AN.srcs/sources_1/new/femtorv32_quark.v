@@ -29,6 +29,12 @@
 // Bruno Levy, Matthias Koch, 2020-2021
 /*******************************************************************/
 
+// This SoC maps APB peripherals at 0x4000_0000..0x4000_2FFF. Stores to RAM
+// can complete without an extra wait state; stores to MMIO still wait for APB.
+`ifndef NRV_IS_IO_ADDR
+`define NRV_IS_IO_ADDR(addr) ((addr[31:14] == 18'h10000) && (addr[13:12] != 2'b11))
+`endif
+
 // Firmware generation flags for this processor
 `define NRV_ARCH     "rv32i"
 `define NRV_ABI      "ilp32"
@@ -417,4 +423,3 @@ endmodule
 // [2] state uses 1-hot encoding (at any time, state has only one bit set to 1).
 // It uses a larger number of bits (one bit per state), but often results in
 // a both more compact (fewer LUTs) and faster state machine.
-
