@@ -1,0 +1,369 @@
+\documentclass[conference]{IEEEtran}
+
+% =================================================
+% PACKAGES
+% =================================================
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{float}
+\usepackage{microtype}
+
+% =================================================
+% DOCUMENT
+% =================================================
+\begin{document}
+
+% =================================================
+% TITLE
+% =================================================
+\title{HIRA: An Autonomous Navigation Robot for Academic Regulation Counseling using GraphRAG}
+
+% =================================================
+% AUTHORS
+% =================================================
+\author{
+    \IEEEauthorblockN{
+        Huy Ngo,
+        Bao Doan,
+        Chan Nguyen,
+        Cuong Tran,
+        Anh Doan,
+        Sang Ha,
+        Thien Pham*,
+    }
+
+    \IEEEauthorblockA{
+        \textit{Faculty of Information Technology, Ho Chi Minh City University of Foreign Languages - Information Technology} \\
+        Ho Chi Minh City, Vietnam \\
+        Email: thienpc@huflit.edu.vn
+    }
+}
+
+\maketitle
+\raggedbottom
+
+% =================================================
+% ABSTRACT
+% =================================================
+\begin{abstract}
+    This paper presents the design and implementation from scratch of HIRA (HUFLIT Intelligent Robotic Assistant), a custom-built mobile robotic platform designed to provide voice and audio-based academic counseling services in university environments. To address the growing demand for automated educational support systems across universities in Ho Chi Minh City, we deploy HIRA as a real-world solution at Ho Chi Minh City University of Foreign Languages – Information Technology (HUFLIT). The system integrates a physical autonomous robotic hardware framework with a Multimodal Graph Retrieval-Augmented Generation (GraphRAG) architecture tailored specifically for the domain of higher education regulations. By leveraging GraphRAG over heterogeneous academic in-house data, HIRA effectively captures complex relationships among educational policies, ensuring highly relevant, context-aware, and accurate natural language responses. Through interactive voice communication and visual displays, HIRA serves as an autonomous assistant capable of answering inquiries from students and parents. Experimental deployment demonstrates the effectiveness of integrating custom hardware design with domain-specific GraphRAG for intelligent academic consultancy.
+\end{abstract}
+
+% =================================================
+% KEYWORDS
+% =================================================
+\begin{IEEEkeywords}
+    Multimodal GraphRAG, Robotic Assistant, Educational Academic Regulation Counseling
+\end{IEEEkeywords}
+
+% =================================================
+% I. INTRODUCTION
+% =================================================
+\section{Introduction}\label{sec1}
+
+Universities publish large amounts of academic information, which can be difficult for students and parents to access. An embodied robotic assistant offers a natural voice-based access method.
+
+Educational robots serve as teaching assistants, learning
+facilitators commonly ~\cite{rosenbergkima2020rscl,donnermann2024integration,donnermann2025highereducation,budagov2026robotta}.
+At the same time, Large Language Models (LLMs) have made natural-language
+interaction more flexible. In this context, LLM with Retrieval-Augmented Generation (RAG) are needed \cite{lewis2020rag}. GraphRAG preserves these relationships through
+graph-based knowledge representation \cite{edge2024graphrag,he2024gretriever,ma2025thinkongraph}. Multimodal
+retrieval further allows evidence to be obtained from images and visually
+structured documents in addition to
+text \cite{chen2022murag,yasunaga2023retrieval,yu2025visrag}. Educational robots mainly emphasize teaching and social
+interaction, while GraphRAG and multimodal retrieval are generally evaluated as
+software-based question-answering systems \cite{ahn2022saycan,driess2023palme,zitkovich2023rt2}.
+
+This paper presents HIRA (HUFLIT Intelligent Robotic Assistant) a programmable intelligent robot that integrates Multimodal
+GraphRAG with a mobile robotic platform in Ho Chi Minh City University of Foreign Languages - Information Technology (HUFLIT), allowing to provide counseling academic services. Qwen3.5-4B \cite{qwen2026qwen35} is used to interpret user questions
+and generate responses from the retrieved evidence. The physical platform consists of a display, an audio system, an RGB camera, a
+mini PC, an ESP8266 controller, an MDD10A motor driver, and a differential-drive
+mechanism. High-level processing, including retrieval, response generation,
+interaction management, and visual perception, is performed on the mini PC\@.
+Low-level motor control is assigned to the ESP8266, which receives motion
+commands and generates control signals for the motor driver. Environmental perception is performed using a single RGB camera, processed by a fine-tuned PIDNet model \cite{xu2023pidnet} to segment
+traversable floor regions and identify areas that may contain obstacles. The
+resulting segmentation is used to support motion decisions without requiring any dedicated distance sensors.
+
+The main contributions are:
+
+\begin{itemize}
+    \item Development of a robot that combines information retrieval, natural-language interaction, environmental perception, and motion control from scratch.
+
+    \item Integration of Multimodal GraphRAG for organizing and retrieving information.
+
+    \item Integration of Qwen3.5-4B for generating natural-language responses.
+
+    \item Development of a camera-based perception mechanism using a single RGB camera and a fine-tuned PIDNet model.
+
+
+\end{itemize}
+
+The remaining sections review related work, present the system and implementation, report the experimental results, and conclude the paper.
+
+
+
+%=================================================
+% II. RELATED WORK
+% =================================================
+\section{Related Work}\label{sec2}
+
+\subsection{Educational Robots and Embodied Interaction}\label{sec2a}
+Educational robots have been widely investigated as teaching assistants, learning facilitators, and interactive social interfaces~\cite{rosenbergkima2020rscl,donnermann2024integration,donnermann2025highereducation,budagov2026robotta}. While physical embodiment improves approachability, these systems typically focus on tutoring within predefined classroom scenarios rather than retrieving dynamic information from heterogeneous sources. 
+
+Concurrently, embodied Large Language Models (LLMs) connect reasoning with robotic action. Systems such as SayCan~\cite{ahn2022saycan}, zero-shot planners~\cite{huang2022zeroshot}, Code as Policies~\cite{liang2023codeaspolicies}, PaLM-E~\cite{driess2023palme}, RT-2~\cite{zitkovich2023rt2}, and VIMA~\cite{jiang2023vima} map linguistic inputs to physical manipulation or navigation tasks. However, their primary objective is robotic control, whereas an information-support robot must prioritize evidence retrieval, coherent response formulation, and safe multimodal interaction.
+
+\subsection{Graph-Based and Multimodal Retrieval-Augmented Generation}\label{sec2b}
+Retrieval-Augmented Generation (RAG) mitigates LLM limitations by grounding responses in external evidence~\cite{lewis2020rag}. Conventional RAG relies on independent text chunks, which falters when answers require reasoning across multiple connected documents. GraphRAG addresses this by structuring knowledge as entities and relationships, supporting both local retrieval and global contextual analysis~\cite{edge2024graphrag,he2024gretriever,ma2025thinkongraph,guo2025lightrag}.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=.75\columnwidth]{Paper_robot_figures/multimodal_rag_taxonomy_refined.png}
+    \caption{The taxonomy of Multimodal RAG Systems and the development path of HIRA.}
+    \label{fig:taxonomy}
+\end{figure}
+
+Furthermore, relevant knowledge often resides in visually structured formats. Multimodal retrieval integrates text and image data~\cite{chen2022murag,yasunaga2023retrieval,yu2025visrag}. Recent advancements fuse multimodal retrieval with graph structures (e.g., Query-driven Multimodal GraphRAG~\cite{bu2025multimodalgraphrag} and MegaRAG~\cite{hsiao2026megarag}) to handle queries dependent on evidence distributed across different modalities. 
+
+In a physical robot, multimodal processing serves dual roles: retrieving visual/textual evidence for question answering and continuously processing camera streams for environmental perception. These functions require distinct timing and reliability constraints.
+
+
+
+Fig.~\ref{fig:taxonomy} summarizes the aforementioned literature. As illustrated, HIRA bridges these distinct domains by serving as an embodied physical assistant that integrates domain-specific Multimodal GraphRAG for complex academic counseling with real-time monocular visual perception for autonomous operation.
+
+% =================================================
+% III. PROPOSED SYSTEM
+% =================================================
+
+\section{Proposed System}\label{sec3}
+
+The proposed intelligent robotic assistant, HIRA, features a decoupled architecture that separates high-level cognitive tasks from low-level reactive control, ensuring both conversational fluency and navigational safety. The system is composed of three primary modules: Multimodal GraphRAG for interaction, PIDNet for visual perception, and a microcontroller-based motion system.
+
+\subsection{Hardware Architecture}
+The platform uses a differential-drive base, a 14-inch touchscreen, bidirectional audio, and a forward-facing RGB camera. A mini PC performs semantic segmentation, GraphRAG retrieval, Qwen3.5-4B inference, and UI management, while an ESP8266 converts serial commands into PWM signals for the MDD10A driver and two encoder-equipped motors.
+
+\subsection{Multimodal Interaction and GraphRAG Architecture}
+HIRA supports seamless human--robot interaction through voice and touch. Spoken queries are transcribed and processed by a domain-specific Multimodal GraphRAG module. Unlike conventional RAG systems that rely on isolated document chunks, GraphRAG structures the university's academic and administrative data into interconnected graph entities. 
+
+The knowledge base is constructed automatically by crawling official HUFLIT web portals, converting HTML to structured JSON, and chunking the cleaned text while preserving source metadata. During interaction, the GraphRAG pipeline retrieves contextually relevant evidence across these connected entities, which is then fed into the Qwen3.5-4B large language model. This process grounds the generated natural-language responses in factual institutional knowledge, which are subsequently delivered via text-to-speech synthesis and visual display.
+
+\subsection{Vision-Based Perception and Navigation}
+The perception module independently processes frames from the RGB camera with a fine-tuned PIDNet model. The segmented floor region is compared with the image center, and a PID controller generates differential steering commands without requiring LiDAR or depth sensors.
+
+\subsection{System Overview}
+
+Fig.~\ref{fig:system-overview} presents the overall architecture of the proposed
+intelligent robot for supporting educational information services. The system
+consists of three main components: a knowledge-retrieval and interaction module
+based on Multimodal GraphRAG, a perception and navigation module based on
+PIDNet, and a robot motion-control module.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{Paper_robot_figures/RobotArch.png}
+    \caption{System Overview for the proposed intelligent educational robot integrating Multimodal GraphRAG and PIDNet.}
+    \label{fig:system-overview}
+\end{figure}
+
+In the interaction branch, text, speech, or image queries are processed by
+Multimodal GraphRAG and returned through the touchscreen and speaker. In the
+navigation branch, the RGB camera and PIDNet identify traversable areas and
+boundaries; the local controller sends differential-drive commands to the
+ESP8266 and MDD10A, with encoder feedback supporting stable motion.
+
+By integrating Multimodal GraphRAG with PIDNet, the proposed robot can interact
+with users, provide educational information, perceive its surroundings, and
+navigate safely in real-world environments.
+
+\subsection{Robot Hardware Architecture}
+
+
+The RGB camera sends the forward floor view to the mini PC, which performs
+segmentation, determines the navigation state, and manages the user interface.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{Paper_robot_figures/robot_hardware_architecture_PIDNet_english.drawio_FINAL.png}
+    \caption{Robot hardware architecture with PIDNet-based environmental perception.}\label{fig:robot-hardware-architecture}
+\end{figure}
+
+
+
+The ESP8266 converts serial commands into PWM and direction signals for the
+MDD10A driver. The two independently controlled JGB37-545 wheels provide
+differential steering, while caster wheels support the mobile base.
+
+\subsection{Multimodal Interaction}
+
+The touchscreen and bidirectional audio subsystem support direct interaction.
+Speech is converted to text, processed by Multimodal GraphRAG, and passed to
+Qwen3.5-4B~\cite{qwen2026qwen35} for grounded response generation. The answer
+is then shown on the display and converted back to speech for the user.
+
+In parallel with the interaction subsystem, an RGB-camera-based perception path
+monitors the environment during robot motion, as illustrated in
+Fig.~\ref{fig:robot-hardware-architecture}. The forward-facing camera
+continuously captures the area ahead and transmits the image stream to the
+central computing platform, a Mini PC (Minisforum UM480
+XT)~\cite{minisforum2026um480xt}. Subsequently, each frame is processed by a
+fine-tuned PIDNet model (PIDNet-L)~\cite{xu2023pidnet} to segment the
+traversable floor region. Consequently, the resulting segmentation mask is used
+to identify potentially unsafe or occupied regions and to derive obstacle-aware
+motion decisions. The corresponding high-level motion commands are transmitted
+to an ESP8266 microcontroller~\cite{espressif2021esp8266}, which generates the
+direction and pulse-width modulation signals required by the motor driver.
+Whereas the touchscreen and audio devices mediate communication with the user,
+the RGB camera is dedicated to environmental perception.
+
+To ensure system efficiency, operational safety, and real-time responsiveness,
+the interaction and environmental-perception functions are implemented as
+separate processing paths. The interaction path manages user input, knowledge
+retrieval, response generation, and multimodal output, whereas the perception
+path continuously processes camera frames and supplies navigation information to
+the low-level control path. This decoupled design allows the robot to maintain
+communication with the user while independently monitoring the area ahead and
+adapting its motion to changes in the surrounding environment.
+
+\subsection{Multimodal GraphRAG Architecture}
+\input{sections/sec3_d_graphrag_arch}
+\subsection{Knowledge Base Construction}
+
+The knowledge base is built from official HUFLIT websites covering programs,
+regulations, announcements, procedures, faculties, and student services. The
+crawler stores the source as JSON with its URL and metadata. HTML navigation,
+repeated headers, redundant whitespace, and duplicated text are removed before
+the content is normalized and divided into retrieval segments. Separating
+collection, preprocessing, and indexing allows updated pages to be reprocessed
+without rebuilding the complete system.
+
+% =================================================
+% IV. SYSTEM IMPLEMENTATION
+% =================================================
+\section{System Implementation}\label{sec4}
+
+\subsection{Robot Platform}
+
+The proposed robot platform consists of a custom mechanical structure, a
+human--robot interaction interface, a vision sensor, and a differential-drive
+mobile base. A 14-inch touchscreen with a resolution
+of $1920 \times 1080$ pixels is integrated into the upper section of the robot
+to display information and support user interaction. A speaker is used to
+deliver voice responses, while an RGB camera serves as the primary sensor for
+perceiving the surrounding environment. The mobile platform employs two JGB37-545 DC geared motors connected to two
+97-mm drive wheels, together with two 100-mm caster wheels for mechanical
+support and directional stability. Each drive motor is equipped with an encoder
+to provide wheel-speed feedback. An ESP8266 microcontroller receives motion
+commands and generates the corresponding control signals for the MDD10A
+dual-channel motor driver.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\columnwidth]{Paper_robot_figures/Huf_robot.jpeg}
+    \caption{Physical HIRA prototype used for academic counseling and autonomous navigation.}
+    \label{fig:huf-robot}
+\end{figure}
+
+Figure~\ref{fig:huf-robot} shows the assembled HIRA prototype, including the display, mobile base, drive wheels, and onboard sensing and control hardware.
+
+\subsection{PIDNet-based Navigation}
+
+The robot employs a vision-based reactive navigation approach that directly
+converts the currently observed traversable area into motion commands. This movement direction is continuously updated using
+images captured by the RGB camera. Each camera frame is processed by PIDNet to identify the traversable floor area. Based on
+the detected floor region, the system estimates an instantaneous steering target
+and compares it with the center of the image to determine the required steering
+direction.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{Paper_robot_figures/camera.png}
+    \caption{Real-time implementation of the proposed PIDNet-based reactive
+    navigation method, showing traversable-area segmentation and PID steering
+    information.}
+    \label{fig:pidnet-reactive-navigation}
+\end{figure}
+
+The steering information is provided to a PID controller, which adjusts the
+speed difference between the left and right motors. When the traversable region
+is located near the image center, the robot moves forward. When the region
+shifts to either side, the motor speeds are adjusted to steer the robot toward
+the available floor area. This process is repeated for each incoming frame,
+allowing the robot to react continuously to changes in the surrounding
+environment. As shown in Fig.~\ref{fig:pidnet-reactive-navigation}, the left panel presents
+the real-time floor-segmentation result, the region of interest, and the
+instantaneous steering target. The right panel displays the navigation status,
+steering error, PID output, and commands generated for the left and right
+motors.
+
+\subsection{GraphRAG Processing Pipeline}
+\input{sections/sec4_c_graphrag}
+
+\subsection{Human--Robot Interaction}
+\input{sections/sec4_d_hri}
+
+% =================================================
+% V. EXPERIMENTAL RESULTS
+% =================================================
+\section{Experimental Results}\label{sec5}
+\input{sections/sec5_experiments}
+
+% =================================================
+% VI. DISCUSSION
+% =================================================
+\section{Conclusion}\label{sec6}
+%\input{sections/sec6_discussion}
+
+
+% ===================================================================
+% Section VI: Discussion
+% ===================================================================
+
+The prototype offers three practical advantages.
+
+\subsection{Architectural Advantages and Practical Merits}
+\begin{itemize}
+    \item Privacy-preserving local processing keeps speech, retrieval, generation, and vision data on the robot.
+    \item A single RGB camera reduces sensing cost while supporting PIDNet navigation at $19.8\,\text{Hz}$.
+    \item Graph-based retrieval preserves multi-turn context and achieves an MRR of $0.925$.
+\end{itemize}
+
+\subsection{Limitations}
+The current implementation reveals the following limitations:
+\begin{itemize}
+    \item Response latency: The average turnaround time is $11.26\,\text{s}$, mainly because local LLM decoding runs on a consumer-grade CPU.
+    \item Acoustic interference: Noise, reverberation, and overlapping speech can reduce recognition accuracy in crowded spaces.
+    \item Monocular vision: Glass, reflective floors, and strong illumination can introduce segmentation errors because the camera does not measure depth directly.
+\end{itemize}
+
+
+
+% =================================================
+% VII. CONCLUSION
+% =================================================
+\subsection{Future Works}\label{sec7}
+
+This paper presents a programmable intelligent robot integrated with multimodal GraphRAG technology designed to provide academic support in universities. The proposed system combines robotic interaction, multimodal information processing, graph-based knowledge retrieval, and large language models to deliver contextual academic services.
+
+Future work will focus on expanding the institutional knowledge base, improving multimodal reasoning, optimizing real-time response performance, and conducting comprehensive user evaluations in authentic university environments. Additionally, future iterations will aim to refine the robot's hardware design for a more human-like aesthetic.
+
+% =================================================
+% ACKNOWLEDGMENT
+% =================================================
+\section*{Acknowledgment}
+
+This research is funded by Ho Chi Minh City University of Foreign Languages - Information Technology under grant number H2026-02.
+
+% =================================================
+% REFERENCES
+% =================================================
+\bibliographystyle{IEEEtran}
+\bibliography{hira_references}
+
+\end{document}
