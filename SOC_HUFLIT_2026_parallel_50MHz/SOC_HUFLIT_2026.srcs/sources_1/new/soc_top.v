@@ -35,10 +35,9 @@ module soc_top #(
     output wire        cpu_trap
 );
 
-    wire        mem_valid, mem_instr, mem_ready;
+    wire        mem_valid, mem_instr;
     wire [31:0] mem_addr, mem_wdata;
     wire [ 3:0] mem_wstrb;
-    wire [31:0] mem_rdata;
 
     // --------------------------------------------------------
     // PicoRV32 CPU (Sử dụng Native Memory Interface để nạp lệnh siêu tốc)
@@ -127,7 +126,6 @@ module soc_top #(
     wire [ 2:0] axi_m_arprot;
     wire        axi_m_rvalid, axi_m_rready;
     wire [31:0] axi_m_rdata;
-    wire [ 1:0] axi_m_bresp, axi_m_rresp;
 
     picorv32_axi_adapter u_axi_adapter (
         .clk            (clk),
@@ -152,29 +150,36 @@ module soc_top #(
     // 1-to-2 AXI CROSSBAR (Bộ định tuyến AXI)
     // ========================================================
     wire aw_sel_parallel = (axi_m_awaddr[31:12] == 20'h40003);
+    wire aw_sel_cnn      = (axi_m_awaddr[31:12] == 20'h40004);
+    // 8-KB CNN memory window: 0x40006000 .. 0x40007FFF.
+    wire aw_sel_cnn_mem  = (axi_m_awaddr[31:13] == 19'h20003);
     wire aw_sel_periph   = (axi_m_awaddr[31:12] >= 20'h40000 && axi_m_awaddr[31:12] <= 20'h40002);
     wire ar_sel_parallel = (axi_m_araddr[31:12] == 20'h40003);
+    wire ar_sel_cnn      = (axi_m_araddr[31:12] == 20'h40004);
+    wire ar_sel_cnn_mem  = (axi_m_araddr[31:13] == 19'h20003);
     wire ar_sel_periph   = (axi_m_araddr[31:12] >= 20'h40000 && axi_m_araddr[31:12] <= 20'h40002);
 
     // Chốt mục tiêu Ghi (Write Latch) - Sửa điều kiện bẻ khóa Deadlock
-    reg [1:0] w_target; // [1]: parallel, [0]: periph
+    reg [3:0] w_target; // [3]: CNN memory, [2]: CNN, [1]: parallel, [0]: periph
     always @(posedge clk) begin
-        if (!resetn) w_target <= 2'b00;
-        else if (axi_m_awvalid && !axi_m_bvalid) w_target <= {aw_sel_parallel, aw_sel_periph};
-        else if (axi_m_bvalid && axi_m_bready) w_target <= 2'b00;
+        if (!resetn) w_target <= 4'b0000;
+        else if (axi_m_awvalid && !axi_m_bvalid)
+            w_target <= {aw_sel_cnn_mem, aw_sel_cnn, aw_sel_parallel, aw_sel_periph};
+        else if (axi_m_bvalid && axi_m_bready) w_target <= 4'b0000;
     end
-    wire [1:0] act_w_target = (w_target != 2'b00) ? w_target : 
-                              (axi_m_awvalid ? {aw_sel_parallel, aw_sel_periph} : 2'b00);
+    wire [3:0] act_w_target = (w_target != 4'b0000) ? w_target :
+                              (axi_m_awvalid ? {aw_sel_cnn_mem, aw_sel_cnn, aw_sel_parallel, aw_sel_periph} : 4'b0000);
 
     // Chốt mục tiêu Đọc (Read Latch) - Sửa điều kiện bẻ khóa Deadlock
-    reg [1:0] r_target;
+    reg [3:0] r_target;
     always @(posedge clk) begin
-        if (!resetn) r_target <= 2'b00;
-        else if (axi_m_arvalid && !axi_m_rvalid) r_target <= {ar_sel_parallel, ar_sel_periph};
-        else if (axi_m_rvalid && axi_m_rready) r_target <= 2'b00;
+        if (!resetn) r_target <= 4'b0000;
+        else if (axi_m_arvalid && !axi_m_rvalid)
+            r_target <= {ar_sel_cnn_mem, ar_sel_cnn, ar_sel_parallel, ar_sel_periph};
+        else if (axi_m_rvalid && axi_m_rready) r_target <= 4'b0000;
     end
-    wire [1:0] act_r_target = (r_target != 2'b00) ? r_target : 
-                              (axi_m_arvalid ? {ar_sel_parallel, ar_sel_periph} : 2'b00);
+    wire [3:0] act_r_target = (r_target != 4'b0000) ? r_target :
+                              (axi_m_arvalid ? {ar_sel_cnn_mem, ar_sel_cnn, ar_sel_parallel, ar_sel_periph} : 4'b0000);
 
     // Tín hiệu AXI cho Nhóm Periph (UART, SPI, I2C)
     wire axi_periph_awready, axi_periph_wready, axi_periph_bvalid, axi_periph_arready, axi_periph_rvalid;
@@ -186,16 +191,58 @@ module soc_top #(
     wire [1:0] axi_parallel_bresp, axi_parallel_rresp;
     wire [31:0] axi_parallel_rdata;
 
-    // --- Ghép kênh trả về CPU (Mux) ---
-    assign axi_m_awready = (act_w_target[1] & axi_parallel_awready) | (act_w_target[0] & axi_periph_awready);
-    assign axi_m_wready  = (act_w_target[1] & axi_parallel_wready)  | (act_w_target[0] & axi_periph_wready);
-    assign axi_m_bvalid  = (act_w_target[1] & axi_parallel_bvalid)  | (act_w_target[0] & axi_periph_bvalid);
-    assign axi_m_bresp   = act_w_target[1] ? axi_parallel_bresp : axi_periph_bresp;
+    wire axi_cnn_awready, axi_cnn_wready, axi_cnn_bvalid, axi_cnn_arready, axi_cnn_rvalid;
+    wire [1:0] axi_cnn_bresp, axi_cnn_rresp;
+    wire [31:0] axi_cnn_rdata;
 
-    assign axi_m_arready = (act_r_target[1] & axi_parallel_arready) | (act_r_target[0] & axi_periph_arready);
-    assign axi_m_rvalid  = (act_r_target[1] & axi_parallel_rvalid)  | (act_r_target[0] & axi_periph_rvalid);
-    assign axi_m_rdata   = act_r_target[1] ? axi_parallel_rdata : axi_periph_rdata;
-    assign axi_m_rresp   = act_r_target[1] ? axi_parallel_rresp : axi_periph_rresp;
+    // CNN memory subsystem AXI-Lite slave responses.
+    wire axi_cnn_mem_awready, axi_cnn_mem_wready, axi_cnn_mem_bvalid;
+    wire axi_cnn_mem_arready, axi_cnn_mem_rvalid;
+    wire [1:0] axi_cnn_mem_bresp, axi_cnn_mem_rresp;
+    wire [31:0] axi_cnn_mem_rdata;
+
+    // CNN read-only AXI master channel.
+    wire [31:0] cnn_dma_araddr;
+    wire        cnn_dma_arvalid;
+    wire        cnn_dma_arready;
+    wire [31:0] cnn_dma_rdata;
+    wire        cnn_dma_rvalid;
+    wire        cnn_dma_rready;
+
+    // --- Ghép kênh trả về CPU (Mux) ---
+    assign axi_m_awready = (act_w_target[3] & axi_cnn_mem_awready) |
+                           (act_w_target[2] & axi_cnn_awready) |
+                           (act_w_target[1] & axi_parallel_awready) |
+                           (act_w_target[0] & axi_periph_awready);
+    assign axi_m_wready  = (act_w_target[3] & axi_cnn_mem_wready) |
+                           (act_w_target[2] & axi_cnn_wready) |
+                           (act_w_target[1] & axi_parallel_wready) |
+                           (act_w_target[0] & axi_periph_wready);
+    assign axi_m_bvalid  = (act_w_target[3] & axi_cnn_mem_bvalid) |
+                           (act_w_target[2] & axi_cnn_bvalid) |
+                           (act_w_target[1] & axi_parallel_bvalid) |
+                           (act_w_target[0] & axi_periph_bvalid);
+    assign axi_m_bresp   = act_w_target[3] ? axi_cnn_mem_bresp :
+                           act_w_target[2] ? axi_cnn_bresp :
+                           act_w_target[1] ? axi_parallel_bresp :
+                           axi_periph_bresp;
+
+    assign axi_m_arready = (act_r_target[3] & axi_cnn_mem_arready) |
+                           (act_r_target[2] & axi_cnn_arready) |
+                           (act_r_target[1] & axi_parallel_arready) |
+                           (act_r_target[0] & axi_periph_arready);
+    assign axi_m_rvalid  = (act_r_target[3] & axi_cnn_mem_rvalid) |
+                           (act_r_target[2] & axi_cnn_rvalid) |
+                           (act_r_target[1] & axi_parallel_rvalid) |
+                           (act_r_target[0] & axi_periph_rvalid);
+    assign axi_m_rdata   = act_r_target[3] ? axi_cnn_mem_rdata :
+                           act_r_target[2] ? axi_cnn_rdata :
+                           act_r_target[1] ? axi_parallel_rdata :
+                           axi_periph_rdata;
+    assign axi_m_rresp   = act_r_target[3] ? axi_cnn_mem_rresp :
+                           act_r_target[2] ? axi_cnn_rresp :
+                           act_r_target[1] ? axi_parallel_rresp :
+                           axi_periph_rresp;
 
     // ========================================================
     // TÍCH HỢP NGOẠI VI (AXI SLAVES)
@@ -272,6 +319,76 @@ module soc_top #(
         .ddr_clk_out     (ddr_clk_out),
         .ddr_valid       (ddr_valid),
         .ddr_done        (ddr_done)
+    );
+
+    // 3. CNN AXI peripheral at base address 0x40004000.
+    CNN u_cnn (
+        .clk             (clk),
+        .rst_n           (resetn),
+
+        .S_AXI_AWADDR    (axi_m_awaddr),
+        .S_AXI_AWVALID   (axi_m_awvalid & act_w_target[2]),
+        .S_AXI_AWREADY   (axi_cnn_awready),
+        .S_AXI_WDATA     (axi_m_wdata),
+        .S_AXI_WSTRB     (axi_m_wstrb),
+        .S_AXI_WVALID    (axi_m_wvalid & act_w_target[2]),
+        .S_AXI_WREADY    (axi_cnn_wready),
+        .S_AXI_BRESP     (axi_cnn_bresp),
+        .S_AXI_BVALID    (axi_cnn_bvalid),
+        .S_AXI_BREADY    (axi_m_bready & act_w_target[2]),
+
+        .S_AXI_ARADDR    (axi_m_araddr),
+        .S_AXI_ARVALID   (axi_m_arvalid & act_r_target[2]),
+        .S_AXI_ARREADY   (axi_cnn_arready),
+        .S_AXI_RDATA     (axi_cnn_rdata),
+        .S_AXI_RRESP     (axi_cnn_rresp),
+        .S_AXI_RVALID    (axi_cnn_rvalid),
+        .S_AXI_RREADY    (axi_m_rready & act_r_target[2]),
+
+        .M_AXI_ARADDR    (cnn_dma_araddr),
+        .M_AXI_ARVALID   (cnn_dma_arvalid),
+        .M_AXI_ARREADY   (cnn_dma_arready),
+        .M_AXI_RDATA     (cnn_dma_rdata),
+        .M_AXI_RVALID    (cnn_dma_rvalid),
+        .M_AXI_RREADY    (cnn_dma_rready)
+    );
+
+    // 4. CNN memory subsystem.  This is an on-chip BRAM-style DDR
+    // surrogate with two frame buffers.  It can later be replaced by a
+    // vendor AXI DDR controller using the same AXI interfaces.
+    cnn_memory_subsystem #(
+        .BASE_ADDR    (32'h4000_6000),
+        .BUFFER_WORDS(768),
+        .TOTAL_WORDS (1536)
+    ) u_cnn_memory (
+        .clk             (clk),
+        .rst_n           (resetn),
+
+        .S_AXI_AWADDR    (axi_m_awaddr),
+        .S_AXI_AWVALID   (axi_m_awvalid & act_w_target[3]),
+        .S_AXI_AWREADY   (axi_cnn_mem_awready),
+        .S_AXI_WDATA     (axi_m_wdata),
+        .S_AXI_WSTRB     (axi_m_wstrb),
+        .S_AXI_WVALID    (axi_m_wvalid & act_w_target[3]),
+        .S_AXI_WREADY    (axi_cnn_mem_wready),
+        .S_AXI_BRESP     (axi_cnn_mem_bresp),
+        .S_AXI_BVALID    (axi_cnn_mem_bvalid),
+        .S_AXI_BREADY    (axi_m_bready & act_w_target[3]),
+
+        .S_AXI_ARADDR    (axi_m_araddr),
+        .S_AXI_ARVALID   (axi_m_arvalid & act_r_target[3]),
+        .S_AXI_ARREADY   (axi_cnn_mem_arready),
+        .S_AXI_RDATA     (axi_cnn_mem_rdata),
+        .S_AXI_RRESP     (axi_cnn_mem_rresp),
+        .S_AXI_RVALID    (axi_cnn_mem_rvalid),
+        .S_AXI_RREADY    (axi_m_rready & act_r_target[3]),
+
+        .DMA_ARADDR     (cnn_dma_araddr),
+        .DMA_ARVALID    (cnn_dma_arvalid),
+        .DMA_ARREADY    (cnn_dma_arready),
+        .DMA_RDATA      (cnn_dma_rdata),
+        .DMA_RVALID     (cnn_dma_rvalid),
+        .DMA_RREADY     (cnn_dma_rready)
     );
 
 endmodule
