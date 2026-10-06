@@ -151,29 +151,46 @@ task test_interleaved_access;
     reg [31:0] read_data_uart;
     reg [31:0] read_data_spi;
     reg [31:0] read_data_i2c;
+    reg test_pass;
     begin
         $display("\n[%0.1f ns] ---> RUNNING TEST 4: Interleaved Cross-Peripheral Access Check", $realtime);
+        test_pass = 1'b1;
 
         axi_write(UART_BASE, 32'h58);
         $display("[%0.1f ns] [STEP 1] WRITE UART: 0x58", $realtime);
 
         axi_read(SPI_BASE + 32'h4, read_data_spi);
         $display("[%0.1f ns] [STEP 2] READ  SPI CS Reg: 0x%h", $realtime, read_data_spi);
+        if ((^read_data_spi === 1'bx) || (read_data_spi !== 32'h0000_0000)) begin
+            $display("[%0.1f ns] [STEP 2] FAIL: SPI CS expected 0, got 0x%h", $realtime, read_data_spi);
+            test_pass = 1'b0;
+        end
 
         axi_write(I2C_BASE + 32'h00, 32'hA7); 
         axi_write(I2C_BASE + 32'h04, 32'h01); 
         $display("[%0.1f ns] [STEP 3] WRITE I2C Data (0xA7) & CMD START (0x01)", $realtime);
 
-        axi_read(UART_BASE, read_data_uart);
-        $display("[%0.1f ns] [STEP 4] READ  UART Reg: 0x%h", $realtime, read_data_uart);
+        axi_read(UART_BASE + 32'h08, read_data_uart);
+        $display("[%0.1f ns] [STEP 4] READ  UART Status Reg: 0x%h", $realtime, read_data_uart);
+        if ((^read_data_uart === 1'bx) || (read_data_uart[31:2] !== 30'd0)) begin
+            $display("[%0.1f ns] [STEP 4] FAIL: invalid UART status response 0x%h", $realtime, read_data_uart);
+            test_pass = 1'b0;
+        end
 
         axi_write(SPI_BASE, 32'hA5);
         $display("[%0.1f ns] [STEP 5] WRITE SPI Data: 0xA5", $realtime);
 
         axi_read(I2C_BASE + 32'h08, read_data_i2c);
         $display("[%0.1f ns] [STEP 6] READ  I2C Status Reg: 0x%h", $realtime, read_data_i2c);
+        if ((^read_data_i2c === 1'bx) || (read_data_i2c[31:2] !== 30'd0)) begin
+            $display("[%0.1f ns] [STEP 6] FAIL: invalid I2C status response 0x%h", $realtime, read_data_i2c);
+            test_pass = 1'b0;
+        end
 
-        $display("[%0.1f ns] TEST 4 PASS!", $realtime);
+        if (test_pass)
+            $display("[%0.1f ns] TEST 4 PASS: all interleaved reads/writes verified", $realtime);
+        else
+            $display("[%0.1f ns] TEST 4 FAIL: one or more interleaved checks failed", $realtime);
     end
 endtask
 
