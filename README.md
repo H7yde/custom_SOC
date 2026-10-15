@@ -1,6 +1,6 @@
-# HUFLIT 50 MHz SoC with CNN
+# HUFLIT 100 MHz SoC with CNN
 
-This repository contains the HUFLIT SoC FPGA project running at 50 MHz. It integrates a PicoRV32 CPU, AXI/APB peripherals, a parallel/DDR interface, and a CNN accelerator for binary human/non-human classification.
+This repository contains the HUFLIT SoC FPGA project running at 100 MHz. It integrates a PicoRV32 CPU, AXI/APB peripherals, a parallel/DDR interface, and a CNN accelerator for binary human/non-human classification.
 
 ## Project layout
 
