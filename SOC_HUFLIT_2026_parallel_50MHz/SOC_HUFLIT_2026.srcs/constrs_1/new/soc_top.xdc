@@ -1,4 +1,4 @@
-create_clock -period 20.000 -name sys_clk [get_ports clk]
+create_clock -period 10.000 -name sys_clk [get_ports clk]
 
 #create_generated_clock -name ddr_clk_out \
 #    -source [get_pins u_parallel_axi/u_ddr_result_serializer/u_oddr_clk/C] \
