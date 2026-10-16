@@ -8,7 +8,7 @@
 // The parallel accelerator at 0x4000_3000 is decoded in soc_top.
 // ============================================================
 
-module soc_apb_top #(
+module soc_axi_top #(
     parameter CLK_FREQ  = 50_000_000,
     parameter BAUD_RATE = 115200
 )(
@@ -62,7 +62,7 @@ module soc_apb_top #(
                      psel_i2c  ? pready_i2c  : 1'b1;
     assign PSLVERR = 1'b0;
 
-    apb_uart_slave #(
+    axi_uart_slave #(
         .CLK_FREQ  (CLK_FREQ),
         .BAUD_RATE (BAUD_RATE)
     ) u_uart (
@@ -79,7 +79,7 @@ module soc_apb_top #(
         .uart_rx      (uart_rx)
     );
 
-    apb_spi_slave u_spi (
+    axi_spi_slave u_spi (
         .PCLK        (clk),
         .PRESETn     (rst_n),
         .SPI_PADDR   ({24'h0, PADDR[7:0]}),
@@ -95,7 +95,7 @@ module soc_apb_top #(
         .spi_miso    (spi_miso)
     );
 
-    apb_i2c_slave u_i2c (
+    axi_i2c_slave u_i2c (
         .PCLK        (clk),
         .PRESETn     (rst_n),
         .I2C_PADDR   ({24'h0, PADDR[7:0]}),

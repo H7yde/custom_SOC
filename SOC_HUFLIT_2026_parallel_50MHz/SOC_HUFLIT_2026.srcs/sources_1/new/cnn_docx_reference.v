@@ -9,6 +9,7 @@ module cnn_docx_reference(
     output reg result_valid, output reg classification
 );
     localparam CAP=0,C1=1,P1=2,C2=3,P2=4,C3=5,P3=6,FC=7,DONE=8;
+    localparam integer MACS_PER_CYCLE = 4;
     reg [3:0] st;
     reg [10:0] pix;
     reg [11:0] n;
@@ -27,7 +28,8 @@ module cnn_docx_reference(
     integer rem, oc, ic, x, y, kx, ky, si, wi;
     integer prem, poc, px, py;
     reg signed [7:0] sample, pool_sample, weight_value;
-    reg signed [31:0] product, total;
+    reg signed [31:0] mac_sum;
+    wire signed [31:0] total_next = acc + mac_sum;
 
     initial begin
         $readmemh("D:/LAB/custom_SOC/CNN_RTL/conv1_rgb_weight.mem",w1);
@@ -45,38 +47,55 @@ module cnn_docx_reference(
         end
     endfunction
 
-    // Address generation for the current MAC. Only one multiplier is
-    // instantiated by this datapath instead of unrolling every convolution.
-    always @* begin
-        rem=0; oc=0; ic=0; x=0; y=0; kx=0; ky=0; si=0; wi=0;
-        sample=0; weight_value=0; product=0;
-        if(st==C1) begin
-            oc=n/900; rem=n%900; y=rem/30; x=rem%30;
-            ic=k/9; rem=k%9; ky=rem/3; kx=rem%3;
-            si=(y+ky)*32+x+kx;
-            if(ic==0) sample=(image[si][23:16]*16)/255;
-            else if(ic==1) sample=(image[si][15:8]*16)/255;
-            else sample=(image[si][7:0]*16)/255;
-            wi=oc*27+k; weight_value=w1[wi];
-        end else if(st==C2) begin
-            oc=n/169; rem=n%169; y=rem/13; x=rem%13;
-            ic=k/9; rem=k%9; ky=rem/3; kx=rem%3;
-            si=ic*225+(y+ky)*15+x+kx; sample=p1[si];
-            wi=oc*36+k; weight_value=w2[wi];
-        end else if(st==C3) begin
-            oc=n/16; rem=n%16; y=rem/4; x=rem%4;
-            ic=k/9; rem=k%9; ky=rem/3; kx=rem%3;
-            si=ic*36+(y+ky)*6+x+kx; sample=p2[si];
-            wi=oc*36+k; weight_value=w3[wi];
-        end else if(st==FC) begin
-            // FC weights use pixel-major order:
-            // (pixel0 ch0..ch3), (pixel1 ch0..ch3), ...
-            // p3 is stored channel-major by the pooling stage, therefore
-            // transpose the 4x4 indexing before multiplying.
-            sample=p3[(fi%4)*4+(fi/4)];
-            weight_value=wf[fi];
+    // Return one convolution MAC term. Four terms are accumulated per clock
+    // below; the address calculation remains identical to the reference path.
+    function signed [31:0] conv_product;
+        input [3:0] state_value;
+        input [11:0] n_value;
+        input [5:0]  k_value;
+        integer f_rem, f_oc, f_ic, f_x, f_y, f_kx, f_ky, f_si, f_wi;
+        reg signed [7:0] f_sample, f_weight;
+        begin
+            f_rem=0; f_oc=0; f_ic=0; f_x=0; f_y=0;
+            f_kx=0; f_ky=0; f_si=0; f_wi=0;
+            f_sample=0; f_weight=0;
+            if (state_value==C1) begin
+                f_oc=n_value/900; f_rem=n_value%900; f_y=f_rem/30; f_x=f_rem%30;
+                f_ic=k_value/9; f_rem=k_value%9; f_ky=f_rem/3; f_kx=f_rem%3;
+                f_si=(f_y+f_ky)*32+f_x+f_kx;
+                if(f_ic==0) f_sample=(image[f_si][23:16]*16)/255;
+                else if(f_ic==1) f_sample=(image[f_si][15:8]*16)/255;
+                else f_sample=(image[f_si][7:0]*16)/255;
+                f_wi=f_oc*27+k_value; f_weight=w1[f_wi];
+            end else if (state_value==C2) begin
+                f_oc=n_value/169; f_rem=n_value%169; f_y=f_rem/13; f_x=f_rem%13;
+                f_ic=k_value/9; f_rem=k_value%9; f_ky=f_rem/3; f_kx=f_rem%3;
+                f_si=f_ic*225+(f_y+f_ky)*15+f_x+f_kx; f_sample=p1[f_si];
+                f_wi=f_oc*36+k_value; f_weight=w2[f_wi];
+            end else begin
+                f_oc=n_value/16; f_rem=n_value%16; f_y=f_rem/4; f_x=f_rem%4;
+                f_ic=k_value/9; f_rem=k_value%9; f_ky=f_rem/3; f_kx=f_rem%3;
+                f_si=f_ic*36+(f_y+f_ky)*6+f_x+f_kx; f_sample=p2[f_si];
+                f_wi=f_oc*36+k_value; f_weight=w3[f_wi];
+            end
+            conv_product=$signed(f_sample)*$signed(f_weight);
         end
-        product=$signed(sample)*$signed(weight_value);
+    endfunction
+
+    integer mac_lane;
+    always @* begin
+        mac_sum=0;
+        if (st==C1 || st==C2 || st==C3) begin
+            for (mac_lane=0; mac_lane<MACS_PER_CYCLE; mac_lane=mac_lane+1)
+                if ((k + mac_lane) < ((st==C1) ? 27 : 36))
+                    mac_sum = mac_sum + conv_product(st, n, k + mac_lane);
+        end else if (st==FC) begin
+            for (mac_lane=0; mac_lane<MACS_PER_CYCLE; mac_lane=mac_lane+1)
+                if ((fi + mac_lane) < 16)
+                    mac_sum = mac_sum +
+                              $signed(p3[((fi+mac_lane)%4)*4+((fi+mac_lane)/4)]) *
+                              $signed(wf[fi+mac_lane]);
+        end
     end
 
     // Pooling sample address. Pooling also uses one comparison per clock.
@@ -111,11 +130,10 @@ module cnn_docx_reference(
                     end
                 end
                 C1,C2,C3: begin
-                    total=acc+product;
-                    if(k==((st==C1)?26:35)) begin
-                        if(st==C1) c1[n]<=qrelu(total);
-                        else if(st==C2) c2[n]<=qrelu(total);
-                        else c3[n]<=qrelu(total);
+                    if((k + MACS_PER_CYCLE) >= ((st==C1)?27:36)) begin
+                        if(st==C1) c1[n]<=qrelu(total_next);
+                        else if(st==C2) c2[n]<=qrelu(total_next);
+                        else c3[n]<=qrelu(total_next);
                         acc<=0; k<=0;
                         if(st==C1) begin
                             if(n==3599) begin n<=0; pk<=0; st<=P1; end
@@ -127,7 +145,7 @@ module cnn_docx_reference(
                             if(n==63) begin n<=0; pk<=0; st<=P3; end
                             else n<=n+1;
                         end
-                    end else begin acc<=total; k<=k+1; end
+                    end else begin acc<=total_next; k<=k+MACS_PER_CYCLE; end
                 end
                 P1,P2,P3: begin
                     if(pk==0) pmax<=pool_sample;
@@ -148,10 +166,9 @@ module cnn_docx_reference(
                     end else pk<=pk+1;
                 end
                 FC: begin
-                    total=acc+product;
-                    if(fi==15) begin classification<=total>=0; result_valid<=1;
+                    if((fi + MACS_PER_CYCLE) >= 16) begin classification<=total_next>=0; result_valid<=1;
                         pixel_ready<=0; st<=DONE;
-                    end else begin acc<=total; fi<=fi+1; end
+                    end else begin acc<=total_next; fi<=fi+MACS_PER_CYCLE; end
                 end
                 DONE: begin
                     // Return to capture mode after the result pulse so the

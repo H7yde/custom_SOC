@@ -205,8 +205,12 @@ module soc_top #(
     wire [31:0] cnn_dma_araddr;
     wire        cnn_dma_arvalid;
     wire        cnn_dma_arready;
+    wire [7:0]  cnn_dma_arlen;
+    wire [2:0]  cnn_dma_arsize;
+    wire [1:0]  cnn_dma_arburst;
     wire [31:0] cnn_dma_rdata;
     wire        cnn_dma_rvalid;
+    wire        cnn_dma_rlast;
     wire        cnn_dma_rready;
 
     // --- Ghép kênh trả về CPU (Mux) ---
@@ -333,6 +337,12 @@ module soc_top #(
         .S_AXI_WSTRB     (axi_m_wstrb),
         .S_AXI_WVALID    (axi_m_wvalid & act_w_target[2]),
         .S_AXI_WREADY    (axi_cnn_wready),
+        // PicoRV32 remains an AXI4-Lite master.  These AXI4 fields describe
+        // the equivalent single-beat transfer at the CNN slave boundary.
+        .S_AXI_AWLEN    (8'd0),
+        .S_AXI_AWSIZE   (3'b010),
+        .S_AXI_AWBURST  (2'b01),
+        .S_AXI_WLAST    (1'b1),
         .S_AXI_BRESP     (axi_cnn_bresp),
         .S_AXI_BVALID    (axi_cnn_bvalid),
         .S_AXI_BREADY    (axi_m_bready & act_w_target[2]),
@@ -340,16 +350,24 @@ module soc_top #(
         .S_AXI_ARADDR    (axi_m_araddr),
         .S_AXI_ARVALID   (axi_m_arvalid & act_r_target[2]),
         .S_AXI_ARREADY   (axi_cnn_arready),
+        .S_AXI_ARLEN    (8'd0),
+        .S_AXI_ARSIZE   (3'b010),
+        .S_AXI_ARBURST  (2'b01),
         .S_AXI_RDATA     (axi_cnn_rdata),
         .S_AXI_RRESP     (axi_cnn_rresp),
         .S_AXI_RVALID    (axi_cnn_rvalid),
+        .S_AXI_RLAST    (),
         .S_AXI_RREADY    (axi_m_rready & act_r_target[2]),
 
         .M_AXI_ARADDR    (cnn_dma_araddr),
         .M_AXI_ARVALID   (cnn_dma_arvalid),
         .M_AXI_ARREADY   (cnn_dma_arready),
+        .M_AXI_ARLEN    (cnn_dma_arlen),
+        .M_AXI_ARSIZE   (cnn_dma_arsize),
+        .M_AXI_ARBURST  (cnn_dma_arburst),
         .M_AXI_RDATA     (cnn_dma_rdata),
         .M_AXI_RVALID    (cnn_dma_rvalid),
+        .M_AXI_RLAST    (cnn_dma_rlast),
         .M_AXI_RREADY    (cnn_dma_rready)
     );
 
@@ -386,8 +404,12 @@ module soc_top #(
         .DMA_ARADDR     (cnn_dma_araddr),
         .DMA_ARVALID    (cnn_dma_arvalid),
         .DMA_ARREADY    (cnn_dma_arready),
+        .DMA_ARLEN      (cnn_dma_arlen),
+        .DMA_ARSIZE     (cnn_dma_arsize),
+        .DMA_ARBURST    (cnn_dma_arburst),
         .DMA_RDATA      (cnn_dma_rdata),
         .DMA_RVALID     (cnn_dma_rvalid),
+        .DMA_RLAST      (cnn_dma_rlast),
         .DMA_RREADY     (cnn_dma_rready)
     );
 
