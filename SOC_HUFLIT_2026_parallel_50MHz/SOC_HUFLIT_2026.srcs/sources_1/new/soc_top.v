@@ -1,11 +1,12 @@
 `timescale 1ns / 1ps
 
 module soc_top #(
-    parameter CLK_FREQ  = 50_000_000,
+    parameter CLK_FREQ  = 100_000_000,
     parameter BAUD_RATE = 115200,
     parameter ENABLE_MUL = 0,
     parameter ENABLE_DIV = 0,
-    parameter ENABLE_IRQ = 1
+    parameter ENABLE_IRQ = 1,
+    parameter DDR_TX_PHASED_CLOCK = 0
 )(
     input  wire        clk,
     input  wire        resetn,
@@ -36,6 +37,8 @@ module soc_top #(
 );
 
     wire        mem_valid, mem_instr;
+    wire        mem_ready;
+    wire [31:0] mem_rdata;
     wire [31:0] mem_addr, mem_wdata;
     wire [ 3:0] mem_wstrb;
 
@@ -87,29 +90,183 @@ module soc_top #(
     assign mem_rdata = mem_rdata_wire;
 
     // ========================================================
-    // BRAM 4KB (Giao tiếp Native 1-cycle latency)
+    // BRAM 4KB, accessed through a five-channel AXI4 controller.
     // ========================================================
     reg [31:0] bram [0:1023];
+    // Vivado stages the registered initialization file into its run directory;
+    // simulation runners can select the CPU image in their own run directory.
     initial $readmemh("firmware.hex", bram);
 
-    reg [31:0] bram_rdata_reg;
-    reg        bram_ready_reg;
+    // AXI4 BRAM channel: all five channels and metadata are visible here.
+    wire [3:0]   bram_axi_awid;
+    wire [31:0]  bram_axi_awaddr;
+    wire [7:0]   bram_axi_awlen;
+    wire [2:0]   bram_axi_awsize;
+    wire [1:0]   bram_axi_awburst;
+    wire         bram_axi_awlock;
+    wire [3:0]   bram_axi_awcache;
+    wire [2:0]   bram_axi_awprot;
+    wire [3:0]   bram_axi_awqos;
+    wire [3:0]   bram_axi_awregion;
+    wire         bram_axi_awuser;
+    wire         bram_axi_awvalid;
+    wire         bram_axi_awready;
+    wire [31:0]  bram_axi_wdata;
+    wire [3:0]   bram_axi_wstrb;
+    wire         bram_axi_wlast;
+    wire         bram_axi_wuser;
+    wire         bram_axi_wvalid;
+    wire         bram_axi_wready;
+    wire [3:0]   bram_axi_bid;
+    wire [1:0]   bram_axi_bresp;
+    wire         bram_axi_buser;
+    wire         bram_axi_bvalid;
+    wire         bram_axi_bready;
+    wire [3:0]   bram_axi_arid;
+    wire [31:0]  bram_axi_araddr;
+    wire [7:0]   bram_axi_arlen;
+    wire [2:0]   bram_axi_arsize;
+    wire [1:0]   bram_axi_arburst;
+    wire         bram_axi_arlock;
+    wire [3:0]   bram_axi_arcache;
+    wire [2:0]   bram_axi_arprot;
+    wire [3:0]   bram_axi_arqos;
+    wire [3:0]   bram_axi_arregion;
+    wire         bram_axi_aruser;
+    wire         bram_axi_arvalid;
+    wire         bram_axi_arready;
+    wire [3:0]   bram_axi_rid;
+    wire [31:0]  bram_axi_rdata;
+    wire [1:0]   bram_axi_rresp;
+    wire         bram_axi_rlast;
+    wire         bram_axi_ruser;
+    wire         bram_axi_rvalid;
+    wire         bram_axi_rready;
+    wire bram_axi_fault;
+    wire bram_mem_wr_en, bram_mem_rd_en;
+    wire [9:0] bram_mem_wr_index, bram_mem_rd_index;
+    wire [31:0] bram_mem_wr_data;
+    wire [3:0] bram_mem_wr_strb;
+    reg [31:0] bram_mem_rd_data;
+
+    picorv32_axi4_bram_adapter u_bram_axi_adapter (
+        .clk(clk), .resetn(resetn),
+        .mem_valid(mem_valid && is_bram), .mem_instr(mem_instr),
+        .mem_addr(mem_addr), .mem_wdata(mem_wdata), .mem_wstrb(mem_wstrb),
+        .mem_ready(bram_ready), .mem_rdata(bram_rdata), .fault(bram_axi_fault),
+        .M_AXI_AWID(bram_axi_awid),
+        .M_AXI_AWADDR(bram_axi_awaddr),
+        .M_AXI_AWLEN(bram_axi_awlen),
+        .M_AXI_AWSIZE(bram_axi_awsize),
+        .M_AXI_AWBURST(bram_axi_awburst),
+        .M_AXI_AWLOCK(bram_axi_awlock),
+        .M_AXI_AWCACHE(bram_axi_awcache),
+        .M_AXI_AWPROT(bram_axi_awprot),
+        .M_AXI_AWQOS(bram_axi_awqos),
+        .M_AXI_AWREGION(bram_axi_awregion),
+        .M_AXI_AWUSER(bram_axi_awuser),
+        .M_AXI_AWVALID(bram_axi_awvalid),
+        .M_AXI_AWREADY(bram_axi_awready),
+        .M_AXI_WDATA(bram_axi_wdata),
+        .M_AXI_WSTRB(bram_axi_wstrb),
+        .M_AXI_WLAST(bram_axi_wlast),
+        .M_AXI_WUSER(bram_axi_wuser),
+        .M_AXI_WVALID(bram_axi_wvalid),
+        .M_AXI_WREADY(bram_axi_wready),
+        .M_AXI_BID(bram_axi_bid),
+        .M_AXI_BRESP(bram_axi_bresp),
+        .M_AXI_BUSER(bram_axi_buser),
+        .M_AXI_BVALID(bram_axi_bvalid),
+        .M_AXI_BREADY(bram_axi_bready),
+        .M_AXI_ARID(bram_axi_arid),
+        .M_AXI_ARADDR(bram_axi_araddr),
+        .M_AXI_ARLEN(bram_axi_arlen),
+        .M_AXI_ARSIZE(bram_axi_arsize),
+        .M_AXI_ARBURST(bram_axi_arburst),
+        .M_AXI_ARLOCK(bram_axi_arlock),
+        .M_AXI_ARCACHE(bram_axi_arcache),
+        .M_AXI_ARPROT(bram_axi_arprot),
+        .M_AXI_ARQOS(bram_axi_arqos),
+        .M_AXI_ARREGION(bram_axi_arregion),
+        .M_AXI_ARUSER(bram_axi_aruser),
+        .M_AXI_ARVALID(bram_axi_arvalid),
+        .M_AXI_ARREADY(bram_axi_arready),
+        .M_AXI_RID(bram_axi_rid),
+        .M_AXI_RDATA(bram_axi_rdata),
+        .M_AXI_RRESP(bram_axi_rresp),
+        .M_AXI_RLAST(bram_axi_rlast),
+        .M_AXI_RUSER(bram_axi_ruser),
+        .M_AXI_RVALID(bram_axi_rvalid),
+        .M_AXI_RREADY(bram_axi_rready)
+    );
+
+    axi4_bram_slave u_bram_axi (
+        .ACLK(clk), .ARESETn(resetn),
+        .S_AXI_AWID(bram_axi_awid),
+        .S_AXI_AWADDR(bram_axi_awaddr),
+        .S_AXI_AWLEN(bram_axi_awlen),
+        .S_AXI_AWSIZE(bram_axi_awsize),
+        .S_AXI_AWBURST(bram_axi_awburst),
+        .S_AXI_AWLOCK(bram_axi_awlock),
+        .S_AXI_AWCACHE(bram_axi_awcache),
+        .S_AXI_AWPROT(bram_axi_awprot),
+        .S_AXI_AWQOS(bram_axi_awqos),
+        .S_AXI_AWREGION(bram_axi_awregion),
+        .S_AXI_AWUSER(bram_axi_awuser),
+        .S_AXI_AWVALID(bram_axi_awvalid),
+        .S_AXI_AWREADY(bram_axi_awready),
+        .S_AXI_WDATA(bram_axi_wdata),
+        .S_AXI_WSTRB(bram_axi_wstrb),
+        .S_AXI_WLAST(bram_axi_wlast),
+        .S_AXI_WUSER(bram_axi_wuser),
+        .S_AXI_WVALID(bram_axi_wvalid),
+        .S_AXI_WREADY(bram_axi_wready),
+        .S_AXI_BID(bram_axi_bid),
+        .S_AXI_BRESP(bram_axi_bresp),
+        .S_AXI_BUSER(bram_axi_buser),
+        .S_AXI_BVALID(bram_axi_bvalid),
+        .S_AXI_BREADY(bram_axi_bready),
+        .S_AXI_ARID(bram_axi_arid),
+        .S_AXI_ARADDR(bram_axi_araddr),
+        .S_AXI_ARLEN(bram_axi_arlen),
+        .S_AXI_ARSIZE(bram_axi_arsize),
+        .S_AXI_ARBURST(bram_axi_arburst),
+        .S_AXI_ARLOCK(bram_axi_arlock),
+        .S_AXI_ARCACHE(bram_axi_arcache),
+        .S_AXI_ARPROT(bram_axi_arprot),
+        .S_AXI_ARQOS(bram_axi_arqos),
+        .S_AXI_ARREGION(bram_axi_arregion),
+        .S_AXI_ARUSER(bram_axi_aruser),
+        .S_AXI_ARVALID(bram_axi_arvalid),
+        .S_AXI_ARREADY(bram_axi_arready),
+        .S_AXI_RID(bram_axi_rid),
+        .S_AXI_RDATA(bram_axi_rdata),
+        .S_AXI_RRESP(bram_axi_rresp),
+        .S_AXI_RLAST(bram_axi_rlast),
+        .S_AXI_RUSER(bram_axi_ruser),
+        .S_AXI_RVALID(bram_axi_rvalid),
+        .S_AXI_RREADY(bram_axi_rready),
+        .mem_wr_en(bram_mem_wr_en), .mem_wr_index(bram_mem_wr_index),
+        .mem_wr_data(bram_mem_wr_data), .mem_wr_strb(bram_mem_wr_strb),
+        .mem_rd_en(bram_mem_rd_en), .mem_rd_index(bram_mem_rd_index),
+        .mem_rd_data(bram_mem_rd_data)
+    );
+
+    // Synchronous read-first BRAM backend. The AXI controller validates
+    // addresses before asserting enables; the original bram hierarchy is kept.
     always @(posedge clk) begin
-        bram_ready_reg <= 1'b0;
-        if (mem_valid && is_bram) begin
-            bram_rdata_reg <= bram[mem_addr[11:2]];
-            bram_ready_reg <= 1'b1; // Phản hồi ngay lập tức
-            
-            if (!mem_instr && |mem_wstrb) begin
-                if (mem_wstrb[0]) bram[mem_addr[11:2]][ 7: 0] <= mem_wdata[ 7: 0];
-                if (mem_wstrb[1]) bram[mem_addr[11:2]][15: 8] <= mem_wdata[15: 8];
-                if (mem_wstrb[2]) bram[mem_addr[11:2]][23:16] <= mem_wdata[23:16];
-                if (mem_wstrb[3]) bram[mem_addr[11:2]][31:24] <= mem_wdata[31:24];
+        if (resetn) begin
+            if (bram_mem_rd_en)
+                bram_mem_rd_data <= bram[bram_mem_rd_index];
+            if (bram_mem_wr_en) begin
+                if (bram_mem_wr_strb[0]) bram[bram_mem_wr_index][ 7: 0] <= bram_mem_wr_data[ 7: 0];
+                if (bram_mem_wr_strb[1]) bram[bram_mem_wr_index][15: 8] <= bram_mem_wr_data[15: 8];
+                if (bram_mem_wr_strb[2]) bram[bram_mem_wr_index][23:16] <= bram_mem_wr_data[23:16];
+                if (bram_mem_wr_strb[3]) bram[bram_mem_wr_index][31:24] <= bram_mem_wr_data[31:24];
             end
         end
     end
-    assign bram_rdata = bram_rdata_reg;
-    assign bram_ready = bram_ready_reg;
+
 
     // ========================================================
     // BỘ CHUYỂN ĐỔI (NATIVE to AXI4-LITE MASTER)
@@ -205,12 +362,8 @@ module soc_top #(
     wire [31:0] cnn_dma_araddr;
     wire        cnn_dma_arvalid;
     wire        cnn_dma_arready;
-    wire [7:0]  cnn_dma_arlen;
-    wire [2:0]  cnn_dma_arsize;
-    wire [1:0]  cnn_dma_arburst;
     wire [31:0] cnn_dma_rdata;
     wire        cnn_dma_rvalid;
-    wire        cnn_dma_rlast;
     wire        cnn_dma_rready;
 
     // --- Ghép kênh trả về CPU (Mux) ---
@@ -292,7 +445,7 @@ module soc_top #(
     );
 
     // 2. Bộ Tăng tốc Song song DDR (IDDR & ODDR)
-    parallel_axi u_parallel_axi (
+    parallel_axi #(.CLK_FREQ(CLK_FREQ), .DDR_TX_PHASED_CLOCK(DDR_TX_PHASED_CLOCK)) u_parallel_axi (
         .clk             (clk),
         .rst_n           (resetn),
         
@@ -337,12 +490,6 @@ module soc_top #(
         .S_AXI_WSTRB     (axi_m_wstrb),
         .S_AXI_WVALID    (axi_m_wvalid & act_w_target[2]),
         .S_AXI_WREADY    (axi_cnn_wready),
-        // PicoRV32 remains an AXI4-Lite master.  These AXI4 fields describe
-        // the equivalent single-beat transfer at the CNN slave boundary.
-        .S_AXI_AWLEN    (8'd0),
-        .S_AXI_AWSIZE   (3'b010),
-        .S_AXI_AWBURST  (2'b01),
-        .S_AXI_WLAST    (1'b1),
         .S_AXI_BRESP     (axi_cnn_bresp),
         .S_AXI_BVALID    (axi_cnn_bvalid),
         .S_AXI_BREADY    (axi_m_bready & act_w_target[2]),
@@ -350,24 +497,16 @@ module soc_top #(
         .S_AXI_ARADDR    (axi_m_araddr),
         .S_AXI_ARVALID   (axi_m_arvalid & act_r_target[2]),
         .S_AXI_ARREADY   (axi_cnn_arready),
-        .S_AXI_ARLEN    (8'd0),
-        .S_AXI_ARSIZE   (3'b010),
-        .S_AXI_ARBURST  (2'b01),
         .S_AXI_RDATA     (axi_cnn_rdata),
         .S_AXI_RRESP     (axi_cnn_rresp),
         .S_AXI_RVALID    (axi_cnn_rvalid),
-        .S_AXI_RLAST    (),
         .S_AXI_RREADY    (axi_m_rready & act_r_target[2]),
 
         .M_AXI_ARADDR    (cnn_dma_araddr),
         .M_AXI_ARVALID   (cnn_dma_arvalid),
         .M_AXI_ARREADY   (cnn_dma_arready),
-        .M_AXI_ARLEN    (cnn_dma_arlen),
-        .M_AXI_ARSIZE   (cnn_dma_arsize),
-        .M_AXI_ARBURST  (cnn_dma_arburst),
         .M_AXI_RDATA     (cnn_dma_rdata),
         .M_AXI_RVALID    (cnn_dma_rvalid),
-        .M_AXI_RLAST    (cnn_dma_rlast),
         .M_AXI_RREADY    (cnn_dma_rready)
     );
 
@@ -404,12 +543,8 @@ module soc_top #(
         .DMA_ARADDR     (cnn_dma_araddr),
         .DMA_ARVALID    (cnn_dma_arvalid),
         .DMA_ARREADY    (cnn_dma_arready),
-        .DMA_ARLEN      (cnn_dma_arlen),
-        .DMA_ARSIZE     (cnn_dma_arsize),
-        .DMA_ARBURST    (cnn_dma_arburst),
         .DMA_RDATA      (cnn_dma_rdata),
         .DMA_RVALID     (cnn_dma_rvalid),
-        .DMA_RLAST      (cnn_dma_rlast),
         .DMA_RREADY     (cnn_dma_rready)
     );
 

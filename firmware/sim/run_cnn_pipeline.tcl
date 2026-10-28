@@ -1,0 +1,11 @@
+log_wave /tb_cnn_pipeline_equivalence/clk
+log_wave /tb_cnn_pipeline_equivalence/rst
+log_wave /tb_cnn_pipeline_equivalence/reference_*
+log_wave /tb_cnn_pipeline_equivalence/pipeline_*
+log_wave /tb_cnn_pipeline_equivalence/seen_*
+log_wave /tb_cnn_pipeline_equivalence/cases_passed
+log_wave /tb_cnn_pipeline_equivalence/pipeline_core/st
+log_wave /tb_cnn_pipeline_equivalence/pipeline_core/n
+log_wave /tb_cnn_pipeline_equivalence/pipeline_core/k
+run all
+quit

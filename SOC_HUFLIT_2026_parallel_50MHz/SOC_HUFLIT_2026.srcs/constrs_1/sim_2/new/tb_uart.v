@@ -5,9 +5,9 @@ module tb_uart;
     // ------------------------------------------------------------------------
     // Simulation Settings
     // ------------------------------------------------------------------------
-    localparam CLK_FREQ         = 50_000_000;               // System Clock 50 MHz
+    localparam CLK_FREQ         = 100_000_000;              // System Clock 100 MHz
     localparam BAUD_RATE        = 5000000;                  // Baud rate tiêu chuẩn
-    localparam CLK_PERIOD_NS    = 20;                      // 1 / 50MHz = 20 ns
+    localparam CLK_PERIOD_NS    = 10;                      // 1 / 100MHz = 10 ns
     // Dùng kiểu real để giữ chính xác 8680.55 ns/bit (tránh lệch timing giữa các bit)
     localparam real BIT_PERIOD_NS = 1_000_000_000.0 / BAUD_RATE; 
 

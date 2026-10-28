@@ -59,7 +59,7 @@ module axi_spi_slave (
         if (!rst_n) begin
             axi_awready <= 0; axi_wready <= 0; axi_bvalid <= 0;
             spi_cs <= 1'b0; start_tx <= 1'b0; tx_data_buf <= 8'h0;
-        end else begin 
+        end else begin
             start_tx <= 0;
             if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && ~axi_bvalid) begin
                 axi_awready <= 1; axi_wready <= 1;

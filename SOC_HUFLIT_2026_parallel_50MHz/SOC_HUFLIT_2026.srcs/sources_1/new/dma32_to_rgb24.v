@@ -7,8 +7,7 @@
 //
 // The fourth byte of one DMA word may belong to the next RGB pixel.  The
 // three-byte packer below deliberately retains that byte across words.
-// The unpacker keeps a byte reservoir so a complete RGB pixel can be emitted
-// every clock once the reservoir is primed.  Data is held while rgb_ready=0.
+// All transfers use ready/valid semantics; data is held while rgb_ready=0.
 
 module dma32_to_rgb24 #(
     parameter MSB_FIRST = 1'b1
@@ -25,54 +24,108 @@ module dma32_to_rgb24 #(
     input  wire        rgb_ready
 );
 
-    // Valid bytes are kept left-aligned in the reservoir.  byte_count is the
-    // number of valid bytes in byte_reservoir[63:64-byte_count*8].
-    reg [63:0] byte_reservoir;
-    reg [3:0]  byte_count;
-    reg [63:0] next_reservoir;
-    reg [3:0]  next_count;
-    wire [31:0] ordered_dma_data = MSB_FIRST ? dma_data :
-                                    {dma_data[7:0], dma_data[15:8],
-                                     dma_data[23:16], dma_data[31:24]};
+    reg [31:0] dma_word_reg;
+    reg        dma_word_valid;
+    reg [1:0]  dma_byte_index;
 
-    wire output_valid = (byte_count >= 4'd3);
-    wire output_pop   = output_valid && rgb_ready;
+    reg [23:0] pack_reg;
+    reg [1:0]  pack_count;
 
-    // Four new bytes can be accepted if there are at most four bytes already
-    // buffered.  With a simultaneous output pop, counts 5..7 also have room.
-    assign dma_ready = (byte_count <= 4'd4) ||
-                       ((byte_count <= 4'd7) && rgb_ready);
-    assign rgb_data  = byte_reservoir[63:40];
-    assign rgb_valid = output_valid;
+    reg [23:0] rgb_data_reg;
+    reg        rgb_valid_reg;
+
+    wire rgb_output_slot_available;
+    wire consume_byte;
+
+    assign dma_ready = !dma_word_valid;
+    assign rgb_data  = rgb_data_reg;
+    assign rgb_valid = rgb_valid_reg;
+
+    // A byte can be consumed unless the third byte of a pixel would overwrite
+    // an output pixel that is currently stalled.
+    assign rgb_output_slot_available = !rgb_valid_reg || rgb_ready;
+    assign consume_byte = dma_word_valid &&
+                          ((pack_count != 2'd2) || rgb_output_slot_available);
+
+    function [7:0] select_dma_byte;
+        input [31:0] word_value;
+        input [1:0]  byte_index;
+        begin
+            if (MSB_FIRST) begin
+                case (byte_index)
+                    2'd0: select_dma_byte = word_value[31:24];
+                    2'd1: select_dma_byte = word_value[23:16];
+                    2'd2: select_dma_byte = word_value[15:8];
+                    default: select_dma_byte = word_value[7:0];
+                endcase
+            end else begin
+                case (byte_index)
+                    2'd0: select_dma_byte = word_value[7:0];
+                    2'd1: select_dma_byte = word_value[15:8];
+                    2'd2: select_dma_byte = word_value[23:16];
+                    default: select_dma_byte = word_value[31:24];
+                endcase
+            end
+        end
+    endfunction
 
     always @(posedge clk) begin
         if (rst) begin
-            byte_reservoir <= 64'd0;
-            byte_count     <= 4'd0;
+            dma_word_reg   <= 32'd0;
+            dma_word_valid <= 1'b0;
+            dma_byte_index <= 2'd0;
+            pack_reg       <= 24'd0;
+            pack_count     <= 2'd0;
+            rgb_data_reg   <= 24'd0;
+            rgb_valid_reg  <= 1'b0;
         end else begin
-            next_reservoir = byte_reservoir;
-            next_count     = byte_count;
+            // Remove a pixel after the downstream accepts it.  If a new
+            // pixel is completed in this same clock, the later assignment
+            // in the consume_byte block replaces this clear with valid=1.
+            if (rgb_valid_reg && rgb_ready)
+                rgb_valid_reg <= 1'b0;
 
-            if (output_pop) begin
-                next_reservoir = next_reservoir << 24;
-                next_count     = next_count - 4'd3;
-            end
-
+            // A DMA word is buffered before its bytes are unpacked.  This
+            // makes dma_ready independent of the byte-level processing.
             if (dma_valid && dma_ready) begin
-                // Append the new MSB-first word after the bytes left in the
-                // reservoir.  The ready equation guarantees next_count<=4.
-                case (next_count)
-                    4'd0: next_reservoir = {ordered_dma_data, 32'd0};
-                    4'd1: next_reservoir = {next_reservoir[63:56], ordered_dma_data, 24'd0};
-                    4'd2: next_reservoir = {next_reservoir[63:48], ordered_dma_data, 16'd0};
-                    4'd3: next_reservoir = {next_reservoir[63:40], ordered_dma_data, 8'd0};
-                    default: next_reservoir = {next_reservoir[63:32], ordered_dma_data};
-                endcase
-                next_count = next_count + 4'd4;
+                dma_word_reg   <= dma_data;
+                dma_word_valid <= 1'b1;
+                dma_byte_index <= 2'd0;
             end
 
-            byte_reservoir <= next_reservoir;
-            byte_count     <= next_count;
+            if (consume_byte) begin
+                case (pack_count)
+                    2'd0: begin
+                        pack_reg[23:16] <= select_dma_byte(dma_word_reg,
+                                                            dma_byte_index);
+                        pack_count <= 2'd1;
+                    end
+
+                    2'd1: begin
+                        pack_reg[15:8] <= select_dma_byte(dma_word_reg,
+                                                           dma_byte_index);
+                        pack_count <= 2'd2;
+                    end
+
+                    default: begin
+                        pack_reg[7:0] <= select_dma_byte(dma_word_reg,
+                                                          dma_byte_index);
+                        rgb_data_reg <= {pack_reg[23:16],
+                                         pack_reg[15:8],
+                                         select_dma_byte(dma_word_reg,
+                                                         dma_byte_index)};
+                        rgb_valid_reg <= 1'b1;
+                        pack_count <= 2'd0;
+                    end
+                endcase
+
+                if (dma_byte_index == 2'd3) begin
+                    dma_word_valid <= 1'b0;
+                    dma_byte_index <= 2'd0;
+                end else begin
+                    dma_byte_index <= dma_byte_index + 2'd1;
+                end
+            end
         end
     end
 

@@ -14,6 +14,10 @@ xsim.dir/
 *.lpr
 dfx_runtime.txt
 
+# Firmware build intermediates (the BRAM .hex image is kept)
+firmware/build/
+__pycache__/
+
 # Generated implementation outputs
 *.bit
 *.bin
@@ -21,3 +25,18 @@ dfx_runtime.txt
 *.rpt
 *.str
 *.xsa
+
+# Local waveforms and simulator databases
+*.wdb
+*.rpx
+*.rdb
+*.vcd
+*.xdbg
+*.py[cod]
+timing_report.txt
+
+# Local restore snapshots; retain the reference used by the CNN equivalence test
+/firmware/backups/*
+!/firmware/backups/before_pipeline_20261018_102557/
+/firmware/backups/before_pipeline_20261018_102557/*
+!/firmware/backups/before_pipeline_20261018_102557/cnn_docx_reference.v

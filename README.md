@@ -1,6 +1,6 @@
 # HUFLIT 100 MHz SoC with CNN
 
-This repository contains the HUFLIT SoC FPGA project running at 100 MHz. It integrates a PicoRV32 CPU, AXI/APB peripherals, a parallel/DDR interface, and a CNN accelerator for binary human/non-human classification.
+This repository contains the HUFLIT SoC FPGA project configured for 100 MHz. It integrates a PicoRV32 CPU, AXI/APB peripherals, a parallel/DDR interface, and a CNN accelerator for binary human/non-human classification.
 
 ## Project layout
 
@@ -160,6 +160,10 @@ Typical frame files are:
 
 ## Open and build with Vivado
 
+BRAM firmware for the PicoRV32 CPU is available in [firmware/README.md](firmware/README.md).
+Run `py firmware/build.py` to build the RV32I program and update `firmware.hex`.
+It boots from the 4 KiB BRAM, reports over UART, and controls CNN baseline/DMA/ping-pong runs.
+
 Open:
 
     SOC_HUFLIT_2026.xpr
@@ -178,9 +182,9 @@ Recommended flow:
 6. Review timing and utilization reports.
 7. Generate Bitstream.
 
-The XDC contains the 50 MHz clock constraint:
+The XDC contains the 100 MHz clock constraint:
 
-    create_clock -period 20.000 -name sys_clk [get_ports clk]
+    create_clock -period 10.000 -name sys_clk [get_ports clk]
 
 ## Python and export files
 

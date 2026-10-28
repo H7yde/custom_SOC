@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module axi_uart_slave #(
-    parameter CLK_FREQ  = 50000000, 
+    parameter CLK_FREQ  = 100000000, 
     parameter BAUD_RATE = 115200
 )(
     input wire clk,

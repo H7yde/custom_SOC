@@ -9,17 +9,14 @@
 //   BASE_ADDR + 0x000 .. 0xBFC : buffer 0 (768 words)
 //   BASE_ADDR + 0xC00 .. 0x17FC: buffer 1 (768 words)
 //
-// The CPU window remains AXI4-Lite while the CNN data path is AXI4 read-only
-// with incremental bursts.  On a board with a real DDR controller, this
-// memory can be replaced by an AXI BRAM/DDR slave without changing the CNN
-// register interface or burst read channel.
+// This module intentionally keeps the AXI data width at 32 bits so that it
+// can be used with the existing AXI4-Lite crossbar.  On a board with a real
+// DDR controller, this module can be replaced by an AXI BRAM/DDR slave
+// without changing the CNN register interface or DMA master.
 module cnn_memory_subsystem #(
     parameter [31:0] BASE_ADDR   = 32'h4000_6000,
     parameter integer BUFFER_WORDS = 768,
-    parameter integer TOTAL_WORDS  = 1536,
-    // Simulation-only option used to exercise AXI R-channel backpressure.
-    // Zero keeps the normal one-beat-per-cycle memory behavior.
-    parameter integer DMA_R_GAP    = 0
+    parameter integer TOTAL_WORDS  = 1536
 )(
     input  wire        clk,
     input  wire        rst_n,
@@ -43,16 +40,12 @@ module cnn_memory_subsystem #(
     output wire        S_AXI_RVALID,
     input  wire        S_AXI_RREADY,
 
-// CNN AXI4 read-only master channel.
+    // CNN read-only AXI master channel.
     input  wire [31:0] DMA_ARADDR,
     input  wire        DMA_ARVALID,
     output wire        DMA_ARREADY,
-    input  wire [7:0]  DMA_ARLEN,
-    input  wire [2:0]  DMA_ARSIZE,
-    input  wire [1:0]  DMA_ARBURST,
     output wire [31:0] DMA_RDATA,
     output wire        DMA_RVALID,
-    output wire        DMA_RLAST,
     input  wire        DMA_RREADY
 );
     localparam integer MEM_BYTES = TOTAL_WORDS * 4;
@@ -70,14 +63,10 @@ module cnn_memory_subsystem #(
     reg [31:0] rdata_reg;
     reg        dma_rvalid_reg;
     reg [31:0] dma_rdata_reg;
-    reg        dma_rlast_reg;
-    reg [31:0] dma_raddr_reg;
-    reg [8:0]  dma_beats_left_reg;
-    reg [7:0]  dma_gap_reg;
 
     wire [31:0] cpu_write_offset = S_AXI_AWADDR - BASE_ADDR;
     wire [31:0] cpu_read_offset  = S_AXI_ARADDR  - BASE_ADDR;
-    wire [31:0] dma_read_offset  = dma_raddr_reg - BASE_ADDR;
+    wire [31:0] dma_read_offset  = DMA_ARADDR   - BASE_ADDR;
     wire [10:0] cpu_write_index = cpu_write_offset[12:2];
     wire [10:0] cpu_read_index  = cpu_read_offset[12:2];
     wire [10:0] dma_read_index  = dma_read_offset[12:2];
@@ -91,15 +80,13 @@ module cnn_memory_subsystem #(
     assign S_AXI_BRESP   = 2'b00;
     assign S_AXI_BVALID  = bvalid_reg;
 
-    assign DMA_ARREADY   = !dma_rvalid_reg && (dma_gap_reg == 8'd0) &&
-                           !rvalid_reg && !S_AXI_ARVALID;
+    assign DMA_ARREADY   = !dma_rvalid_reg && !rvalid_reg && !S_AXI_ARVALID;
     assign S_AXI_ARREADY = !rvalid_reg && !dma_rvalid_reg && !DMA_ARVALID;
     assign S_AXI_RDATA   = rdata_reg;
     assign S_AXI_RRESP   = 2'b00;
     assign S_AXI_RVALID  = rvalid_reg;
     assign DMA_RDATA     = dma_rdata_reg;
     assign DMA_RVALID    = dma_rvalid_reg;
-    assign DMA_RLAST     = dma_rlast_reg;
 
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -113,10 +100,6 @@ module cnn_memory_subsystem #(
             rdata_reg     <= 32'd0;
             dma_rvalid_reg<= 1'b0;
             dma_rdata_reg <= 32'd0;
-            dma_rlast_reg <= 1'b0;
-            dma_raddr_reg <= 32'd0;
-            dma_beats_left_reg <= 9'd0;
-            dma_gap_reg   <= 8'd0;
         end else begin
             if (S_AXI_AWVALID && S_AXI_AWREADY) begin
                 awaddr_reg <= S_AXI_AWADDR;
@@ -155,49 +138,15 @@ module cnn_memory_subsystem #(
                 rvalid_reg <= 1'b0;
             end
 
-            // Insert optional idle cycles between R-channel beats.  This
-            // models memory latency and verifies that CNN holds the burst
-            // state while RVALID is temporarily deasserted.
-            if (!dma_rvalid_reg && (dma_gap_reg != 8'd0)) begin
-                if (dma_gap_reg == 8'd1) begin
-                    dma_gap_reg     <= 8'd0;
-                    dma_rvalid_reg  <= 1'b1;
-                end else begin
-                    dma_gap_reg <= dma_gap_reg - 8'd1;
-                end
-            end
-
             if (DMA_ARVALID && DMA_ARREADY) begin
                 dma_rvalid_reg <= 1'b1;
-                dma_raddr_reg <= DMA_ARADDR;
-                dma_beats_left_reg <= {1'b0, DMA_ARLEN} + 9'd1;
-                dma_rlast_reg <= (DMA_ARLEN == 8'd0);
-                dma_gap_reg <= 8'd0;
-                if (((DMA_ARADDR - BASE_ADDR) < MEM_BYTES) &&
-                    (((DMA_ARADDR - BASE_ADDR) >> 2) < TOTAL_WORDS))
-                    dma_rdata_reg <= mem[(DMA_ARADDR - BASE_ADDR) >> 2];
+                if ((dma_read_offset < MEM_BYTES) &&
+                    (dma_read_index < TOTAL_WORDS))
+                    dma_rdata_reg <= mem[dma_read_index];
                 else
                     dma_rdata_reg <= 32'h0000_0000;
             end else if (dma_rvalid_reg && DMA_RREADY) begin
-                if (dma_beats_left_reg > 9'd1) begin
-                    dma_raddr_reg <= dma_raddr_reg + 32'd4;
-                    dma_beats_left_reg <= dma_beats_left_reg - 9'd1;
-                    dma_rlast_reg <= (dma_beats_left_reg == 9'd2);
-                    if (((dma_raddr_reg + 32'd4 - BASE_ADDR) < MEM_BYTES) &&
-                        (((dma_raddr_reg + 32'd4 - BASE_ADDR) >> 2) < TOTAL_WORDS))
-                        dma_rdata_reg <= mem[(dma_raddr_reg + 32'd4 - BASE_ADDR) >> 2];
-                    else
-                        dma_rdata_reg <= 32'h0000_0000;
-                    if (DMA_R_GAP != 0) begin
-                        dma_rvalid_reg <= 1'b0;
-                        dma_gap_reg <= DMA_R_GAP;
-                    end
-                end else begin
-                    dma_rvalid_reg <= 1'b0;
-                    dma_rlast_reg <= 1'b0;
-                    dma_beats_left_reg <= 9'd0;
-                    dma_gap_reg <= 8'd0;
-                end
+                dma_rvalid_reg <= 1'b0;
             end
         end
     end

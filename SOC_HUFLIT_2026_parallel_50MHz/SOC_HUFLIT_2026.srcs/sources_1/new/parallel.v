@@ -94,7 +94,9 @@ endmodule
 // 3. ODDR Serializer
 // ------------------------------------------------------------
 module ddr_result_serializer #(
-    parameter DATA_WIDTH = 32
+    parameter DATA_WIDTH = 32,
+    parameter CLK_FREQ = 100_000_000,
+    parameter PHASED_CLOCK = 0
 )(
     input  wire                  clk,
     input  wire                  rst_n,
@@ -118,7 +120,54 @@ module ddr_result_serializer #(
     reg [DATA_WIDTH-1:0] rise_word;
     reg [DATA_WIDTH-1:0] fall_word;
 
-    assign ddr_ready = (phase == PHASE_IDLE);
+    wire forwarded_clk, serializer_clk;
+    wire serializer_reset_n;
+    generate
+        if (PHASED_CLOCK) begin : gen_phased_clock
+            // Use integer MMCM dividers because Artix-7 does not support
+            // fine phase shift with a fractional CLKOUT0 divider. At 100 MHz,
+            // M=O=12 gives a 1.2 GHz VCO; 219 steps give 3.258929 ns.
+            localparam real MMCM_VCO_HZ = 1200000000.0;
+            localparam real CLOCK_RATIO = MMCM_VCO_HZ / CLK_FREQ;
+            localparam integer PHASE_STEPS = 219;
+            localparam real OUTPUT_PHASE_DEG =
+                PHASE_STEPS * 360.0 / (56.0 * CLOCK_RATIO);
+            wire feedback_raw, feedback, shifted_raw, locked;
+            (* ASYNC_REG = "TRUE" *) reg [1:0] lock_release = 0;
+            MMCME2_ADV #(
+                .CLKIN1_PERIOD(1000000000.0 / CLK_FREQ),
+                .CLKFBOUT_MULT_F(CLOCK_RATIO), .DIVCLK_DIVIDE(1),
+                .CLKOUT0_DIVIDE_F(CLOCK_RATIO), .CLKOUT0_PHASE(OUTPUT_PHASE_DEG),
+                .CLKOUT0_USE_FINE_PS("TRUE"), .COMPENSATION("BUF_IN"),
+                .STARTUP_WAIT("FALSE")
+            ) u_tx_mmcm (
+                .CLKIN1(clk), .CLKFBIN(feedback), .CLKFBOUT(feedback_raw),
+                .CLKIN2(1'b0), .CLKINSEL(1'b1),
+                .CLKOUT0(shifted_raw), .LOCKED(locked), .RST(~rst_n), .PWRDWN(1'b0),
+                // UG472 requires PSCLK even for a fixed initial fine phase.
+                .PSCLK(clk), .PSEN(1'b0), .PSINCDEC(1'b0), .PSDONE(),
+                .DCLK(1'b0), .DEN(1'b0), .DWE(1'b0), .DADDR(7'b0), .DI(16'b0),
+                .DO(), .DRDY(), .CLKINSTOPPED(), .CLKFBSTOPPED(),
+                .CLKFBOUTB(), .CLKOUT0B(), .CLKOUT1(), .CLKOUT1B(),
+                .CLKOUT2(), .CLKOUT2B(), .CLKOUT3(), .CLKOUT3B(),
+                .CLKOUT4(), .CLKOUT5(), .CLKOUT6()
+            );
+            BUFG u_feedback_bufg (.I(feedback_raw), .O(feedback));
+            BUFG u_forwarded_bufg (.I(shifted_raw), .O(forwarded_clk));
+            assign serializer_clk = clk;
+            always @(posedge clk or negedge rst_n) begin
+                if (!rst_n) lock_release<=0;
+                else if (!locked) lock_release<=0;
+                else lock_release<={lock_release[0],1'b1};
+            end
+            assign serializer_reset_n = rst_n && lock_release[1];
+        end else begin : gen_original_clock
+            assign forwarded_clk = clk;
+            assign serializer_clk = clk;
+            assign serializer_reset_n = rst_n;
+        end
+    endgenerate
+    assign ddr_ready = serializer_reset_n && (phase == PHASE_IDLE);
 
     genvar bit_index;
     generate
@@ -128,20 +177,20 @@ module ddr_result_serializer #(
                 .INIT         (1'b0),
                 .SRTYPE       ("SYNC")
             ) u_oddr (
-                .Q  (ddr_data[bit_index]), .C  (clk), .CE (1'b1),
+                .Q  (ddr_data[bit_index]), .C  (serializer_clk), .CE (1'b1),
                 .D1 (rise_word[bit_index]), .D2 (fall_word[bit_index]),
-                .R  (~rst_n), .S  (1'b0)
+                .R  (~serializer_reset_n), .S  (1'b0)
             );
         end
     endgenerate
 
     ODDR #(.DDR_CLK_EDGE ("SAME_EDGE"), .INIT (1'b0), .SRTYPE ("SYNC")) 
     u_oddr_clk (
-        .Q(ddr_clk_out), .C(clk), .CE(1'b1), .D1(1'b0), .D2(1'b1), .R(~rst_n), .S(1'b0)
+        .Q(ddr_clk_out), .C(forwarded_clk), .CE(1'b1), .D1(1'b0), .D2(1'b1), .R(~serializer_reset_n), .S(1'b0)
     );
 
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+    always @(posedge serializer_clk or negedge serializer_reset_n) begin
+        if (!serializer_reset_n) begin
             phase <= PHASE_IDLE; rise_word <= 0; fall_word <= 0; ddr_valid <= 0; ddr_done <= 0;
         end else begin
             ddr_done <= 1'b0;
@@ -209,7 +258,9 @@ endmodule
 // 5. Module TOP (AXI4-Lite Wrapper)
 // ------------------------------------------------------------
     module parallel_axi #(
-    parameter NUM_LANES = 4
+    parameter NUM_LANES = 4,
+    parameter CLK_FREQ = 100_000_000,
+    parameter DDR_TX_PHASED_CLOCK = 0
 )(
     input  wire        clk,
     input  wire        rst_n,
@@ -335,7 +386,8 @@ endmodule
     wire all_results_valid = &result_valid_reg;
     wire load_serializer = all_results_valid & ddr_ready;
 
-    ddr_result_serializer #(.DATA_WIDTH (32)) u_ddr_result_serializer (
+    ddr_result_serializer #(.DATA_WIDTH(32), .CLK_FREQ(CLK_FREQ),
+        .PHASED_CLOCK(DDR_TX_PHASED_CLOCK)) u_ddr_result_serializer (
         .clk(clk), .rst_n(rst_n), .load(load_serializer),
         .data_rise_0(result_flat[31:0]), .data_fall_0(result_flat[63:32]),
         .data_rise_1(result_flat[95:64]), .data_fall_1(result_flat[127:96]),
