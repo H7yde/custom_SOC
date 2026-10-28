@@ -1,5 +1,19 @@
 **Rà soát SoC — 27/10/2026**
 
+**Cập nhật trạng thái ngày 28/10/2026:** nội dung bên dưới giữ bằng chứng của
+lần review 27/10. Lỗi đường dẫn weight ở mục 1 đã được sửa cho workspace
+`D:/LAB/custom_SOC-main`: core đọc bốn file trong `new/source/`. Đường dẫn vẫn
+là tuyệt đối nên cần cập nhật nếu chuyển máy. Frame memory của `CNN.v` đã đổi
+sang BRAM, regression clock gating/BRAM đã PASS năm lượt ảnh. Các lỗi tranh
+chấp CPU/DMA, địa chỉ AW, parallel và I2C trong review chưa được sửa.
+
+Project hiện chọn `xc7z020iclg400-1L`, trong khi XDC vẫn gán chân Artix-7
+XCM-208A; các report Artix và số dòng dưới đây là dữ liệu lịch sử. Cấu hình
+mới nhất xem [README](README.md), chi tiết CNN xem
+[tài liệu CNN](CNN_documentation_optimization.md). Các log trong `firmware/build/`
+là artifact cục bộ bị `.gitignore` loại khỏi các bản cập nhật mới, không phải
+file bắt buộc có sẵn khi clone repository.
+
 Đã rà soát 13 file RTL trong cây `soc_top`, ba file phụ/legacy cùng thư mục,
 cấu hình project Vivado, XDC 100 MHz, báo cáo synthesis/implementation gần nhất
 và firmware điều khiển CNN. Trong lượt rà soát này không sửa RTL, firmware hay

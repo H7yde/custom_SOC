@@ -1,5 +1,10 @@
 # Firmware BRAM cho HUFLIT SoC
 
+Cập nhật tài liệu: **28/10/2026**. Cấu hình project và các điểm chưa đồng bộ
+giữa device/XDC xem [README chính](../README.md). Project hiện chọn
+`xc7z020iclg400-1L`, chạy 100 MHz; số liệu tài nguyên Artix ở cuối tài liệu là
+kết quả của các lần tổng hợp trước, không phải của target Zynq hiện tại.
+
 Nếu chỉ cần kiểm tra đọc/ghi BRAM, dùng bản tối giản trong
 [BRAM_ONLY.md](BRAM_ONLY.md): `py firmware/build.py --app bram --no-deploy`.
 Bản này lưu PASS/FAIL trong BRAM và không dùng UART/CNN.
@@ -72,11 +77,16 @@ Project `.xpr` đã được bổ sung `firmware.hex` vào Design Sources với 
 **Tcl Console** để cập nhật phiên đang mở:
 
 ```tcl
-source D:/SoC/custom_SOC-main/custom_SOC-main/firmware/add_to_vivado.tcl
+source D:/LAB/custom_SOC-main/firmware/add_to_vivado.tcl
 ```
 
 Sau khi thay firmware, chạy lại synthesis/implementation/generate bitstream để
 ảnh khởi tạo BRAM mới được đưa vào FPGA. Với mô phỏng, đóng rồi chạy lại simulation.
+
+Tại lần đối chiếu 28/10/2026, `new/firmware.hex` khớp SHA-256 với
+`firmware/firmware.hex`, gồm 1024 word. Đây là firmware UART/CNN, không phải
+`firmware/bram_test.hex`. Lệnh `$readmemh("firmware.hex", bram)` đọc file đã
+đăng ký/stage cho lần chạy Vivado, không tự tìm trong thư mục `firmware/`.
 
 RTL `soc_top.v` được sửa hai khai báo cần thiết:
 
@@ -94,8 +104,9 @@ simulator ngoài project, đặt `firmware.hex` vào working directory của sim
 ## Gửi ảnh từ PC
 
 Nạp bitstream mới lên FPGA, kết nối UART TX/RX và GND đúng với board, đóng các
-terminal khác đang giữ cổng COM. Chọn clock/baud trùng với cấu hình SoC. Project
-hiện chưa có đầy đủ gán chân `PACKAGE_PIN` cho board, cần dùng XDC đúng phần cứng.
+terminal khác đang giữ cổng COM. Chọn clock/baud trùng với cấu hình SoC. XDC hiện
+có gán chân theo HuMANDATA XCM-208A Artix-7 FBG676, trong khi `.xpr` đang chọn
+Zynq CLG400. Cần thay pinout và I/O standard theo board thực tế trước khi nạp.
 
 Cài thư viện cho công cụ host (chỉ cần khi dùng UART với board):
 

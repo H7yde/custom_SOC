@@ -1,5 +1,13 @@
 # Bản thử nghiệm pipeline CNN ở 100 MHz
 
+> Tài liệu lịch sử của đợt thử pipeline. Cập nhật trạng thái 28/10/2026:
+> core hiện có thêm clock gating và frame BRAM; project chọn
+> `xc7z020iclg400-1L`. Các số liệu Artix và cấu trúc run bên dưới không phải
+> kết quả của target Zynq hiện tại. RTL MMCM hiện dùng VCO 1,2 GHz, 219 bước
+> pha, khoảng 3,259 ns (117,054°) tại 100 MHz; `soc_top.v` mặc định tùy chọn
+> pha bằng 0, `.xpr` ghi đè bằng 1. Giá trị 115,071429°/1 GHz bên dưới mô tả
+> cấu hình của đợt thử cũ. Hướng dẫn hiện tại xem [README](../README.md).
+
 Các đường dẫn dưới đây tính từ thư mục gốc repository. Đây là bản sửa RTL để kiểm tra timing; firmware BRAM của CPU và vùng nhớ riêng của CNN vẫn độc lập.
 
 ## Thay đổi

@@ -1,5 +1,13 @@
 # Ghi chú chỉnh sửa RTL và timing 100 MHz
 
+> Đây là ghi chú lịch sử ngày 19/10, không phải cấu hình hiện tại.
+> Tính đến 28/10/2026, `CNN.v` đã có clock gating và frame BRAM; `.xpr` chọn
+> `xc7z020iclg400-1L`, các run `synth_100MHz`/`impl_100MHz`, constraint set
+> `constrs_1`. MMCM hiện dùng VCO 1,2 GHz, pha khoảng 117,054° tại 100 MHz.
+> Các so sánh hash, pha, device và timing bên dưới chỉ áp dụng cho đợt thử
+> được ghi lại. Xem [README](../README.md) cho trạng thái mới nhất và điểm
+> chưa đồng bộ giữa target Zynq với pinout Artix trong XDC.
+
 Ngày lập ghi chú: **19/10/2026** (Asia/Saigon).
 
 Project: `SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.xpr`.
