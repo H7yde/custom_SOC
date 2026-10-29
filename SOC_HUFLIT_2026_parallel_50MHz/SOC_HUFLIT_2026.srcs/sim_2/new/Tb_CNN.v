@@ -104,7 +104,7 @@ module tb_CNN;
         .DMA_ARADDR(cnn_dma_araddr), .DMA_ARVALID(cnn_dma_arvalid), .DMA_ARREADY(cnn_dma_arready),
         .DMA_RDATA(cnn_dma_rdata), .DMA_RVALID(cnn_dma_rvalid), .DMA_RREADY(cnn_dma_rready)
     );
-    always #5 clk = ~clk;        // 100 MHz
+    always #10 clk = ~clk;       // 50 MHz
     always @(posedge clk) sim_cycle = sim_cycle + 1;
 
     // Write one AXI4-Lite transaction. CNN accepts address and data
@@ -457,8 +457,8 @@ module tb_CNN;
         fail_count = 0;
         sim_cycle = 0;
 
-        $readmemh("D:/LAB/custom_SOC-main/CNN_RTL/human_frames.mem", human_pixels);
-        $readmemh("D:/LAB/custom_SOC-main/CNN_RTL/nonhuman_frame.mem", nonhuman_pixels);
+        $readmemh("D:/SoC/custom_SOC-main/custom_SOC-main/CNN_RTL/human_frames.mem", human_pixels);
+        $readmemh("D:/SoC/custom_SOC-main/custom_SOC-main/CNN_RTL/nonhuman_frame.mem", nonhuman_pixels);
 
         repeat (5) @(posedge clk);
         rst_n = 1'b1;

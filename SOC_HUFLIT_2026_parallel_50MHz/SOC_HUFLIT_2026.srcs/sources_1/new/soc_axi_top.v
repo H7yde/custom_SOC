@@ -6,7 +6,7 @@
 //   0x4000_1000 - 0x4000_1FFF : SPI
 //   0x4000_2000 - 0x4000_2FFF : I2C
 module soc_axi_top #(
-    parameter CLK_FREQ  = 100_000_000,
+    parameter CLK_FREQ  = 125_000_000,
     parameter BAUD_RATE = 115200
 )(
     input  wire        clk,

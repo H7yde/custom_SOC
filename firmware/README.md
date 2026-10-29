@@ -1,10 +1,5 @@
 # Firmware BRAM cho HUFLIT SoC
 
-Cập nhật tài liệu: **28/10/2026**. Cấu hình project và các điểm chưa đồng bộ
-giữa device/XDC xem [README chính](../README.md). Project hiện chọn
-`xc7z020iclg400-1L`, chạy 100 MHz; số liệu tài nguyên Artix ở cuối tài liệu là
-kết quả của các lần tổng hợp trước, không phải của target Zynq hiện tại.
-
 Nếu chỉ cần kiểm tra đọc/ghi BRAM, dùng bản tối giản trong
 [BRAM_ONLY.md](BRAM_ONLY.md): `py firmware/build.py --app bram --no-deploy`.
 Bản này lưu PASS/FAIL trong BRAM và không dùng UART/CNN.
@@ -14,7 +9,7 @@ Firmware bare-metal C + assembly dành cho `soc_top` đang có trong project:
 
 - CPU PicoRV32, ISA **RV32I**, ABI **ILP32**, không cần bộ nhân/chia hoặc lệnh nén.
 - BRAM 4 KiB tại `0x00000000..0x00000fff`; reset PC = `0`; stack bắt đầu tại `0x00000ff0`.
-- Clock mặc định 100 MHz, UART **115200 baud, 8N1**.
+- Clock mặc định 50 MHz, UART **115200 baud, 8N1**.
 - Firmware boot, tự kiểm tra dữ liệu/BRAM và thanh ghi CNN, rồi chờ lệnh UART.
 - Nhận ảnh RGB888 32×32 từ PC và chạy CNN qua AXI-Lite, DMA buffer 0/1 hoặc ping-pong.
 
@@ -77,16 +72,11 @@ Project `.xpr` đã được bổ sung `firmware.hex` vào Design Sources với 
 **Tcl Console** để cập nhật phiên đang mở:
 
 ```tcl
-source D:/LAB/custom_SOC-main/firmware/add_to_vivado.tcl
+source D:/SoC/custom_SOC-main/custom_SOC-main/firmware/add_to_vivado.tcl
 ```
 
 Sau khi thay firmware, chạy lại synthesis/implementation/generate bitstream để
 ảnh khởi tạo BRAM mới được đưa vào FPGA. Với mô phỏng, đóng rồi chạy lại simulation.
-
-Tại lần đối chiếu 28/10/2026, `new/firmware.hex` khớp SHA-256 với
-`firmware/firmware.hex`, gồm 1024 word. Đây là firmware UART/CNN, không phải
-`firmware/bram_test.hex`. Lệnh `$readmemh("firmware.hex", bram)` đọc file đã
-đăng ký/stage cho lần chạy Vivado, không tự tìm trong thư mục `firmware/`.
 
 RTL `soc_top.v` được sửa hai khai báo cần thiết:
 
@@ -104,9 +94,8 @@ simulator ngoài project, đặt `firmware.hex` vào working directory của sim
 ## Gửi ảnh từ PC
 
 Nạp bitstream mới lên FPGA, kết nối UART TX/RX và GND đúng với board, đóng các
-terminal khác đang giữ cổng COM. Chọn clock/baud trùng với cấu hình SoC. XDC hiện
-có gán chân theo HuMANDATA XCM-208A Artix-7 FBG676, trong khi `.xpr` đang chọn
-Zynq CLG400. Cần thay pinout và I/O standard theo board thực tế trước khi nạp.
+terminal khác đang giữ cổng COM. Chọn clock/baud trùng với cấu hình SoC. Project
+hiện chưa có đầy đủ gán chân `PACKAGE_PIN` cho board, cần dùng XDC đúng phần cứng.
 
 Cài thư viện cho công cụ host (chỉ cần khi dùng UART với board):
 
@@ -216,7 +205,7 @@ powershell -ExecutionPolicy Bypass -File firmware/sim/run.ps1 -BaudRate 115200
 ```
 
 Script mặc định tăng baud trong testbench lên 1 Mbaud để rút ngắn thời gian mô
-phỏng, clock vẫn 100 MHz; không đổi baud mặc định trong RTL. Mô phỏng sử dụng CPU
+phỏng, clock vẫn 50 MHz; không đổi baud mặc định trong RTL. Mô phỏng sử dụng CPU
 PicoRV32 thật, ảnh firmware trong BRAM, tín hiệu UART nối tiếp thật và CNN thật.
 Log nằm trong `firmware/build/sim/`; thành công có `FIRMWARE INTEGRATION PASS`.
 
@@ -235,40 +224,3 @@ Kết quả đã xác nhận với bản firmware đi kèm:
 Log ảnh thật: `firmware/build/sim/full_images.log`; log baud 115200:
 `firmware/build/sim115200/simulate.log`. Bài ảnh thật mô phỏng UART ở 1 Mbaud,
 mất khoảng 9 phút trên máy hiện tại. Chưa kiểm tra trên board vật lý.
-
-## Clock gating CNN
-
-`CNN.v` dùng một `BUFGCE` cấp clock riêng cho `dma32_to_rgb24` và
-`cnn_docx_reference`. Clock được mở khi reset, có START, đang BUSY hoặc đang
-hoàn tất xung kết quả; khi rảnh, hai khối tự ngừng clock. AXI, bộ điều khiển DMA
-và các thanh ghi STATUS/RESULT vẫn dùng clock gốc. Không cần đổi firmware.
-
-Kiểm tra bằng mô hình BUFGCE của Xilinx, năm lượt ảnh thật qua baseline/DMA,
-ghi từng phần/zero-strobe, giữ nội dung frame RAM qua reset, backpressure,
-đọc AXI khi nghỉ và reset khi nghỉ/đang chạy:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File firmware/sim/run_cnn_clock_gating.ps1 -VivadoBin D:/Vivado_data/2025.2/Vivado/bin
-```
-
-Log tại `firmware/build/sim_cnn_clock_gating/simulate.log`; kết quả thành công
-có `CNN CLOCK GATING PASS`. Script chỉ đổi đường dẫn weight tuyệt đối trong
-bản sao mô phỏng, không sửa file RTL gốc hoặc ảnh firmware đang chọn.
-
-## Frame buffer CNN dùng BRAM
-
-`CNN.v` khai báo `frame_mem` với `ram_style="block"`, tách cổng ghi theo byte
-và cổng đọc đồng bộ. Khi START, cổng đọc lấy word 0; mỗi lần bộ chuyển RGB nhận
-một word, RAM đọc trước word kế tiếp. Word đã đọc được giữ nguyên trong lúc
-phía nhận chờ, nên không cần thêm khoảng trống giữa các word. RAM và thanh ghi
-dữ liệu đọc không bị xóa khi reset; `frame_send_valid` ngăn dùng dữ liệu chưa
-hợp lệ. Đọc/ghi đồng thời cùng word có ngữ nghĩa read-first.
-
-Register map AXI, lựa chọn baseline/DMA và firmware giữ nguyên. Chạy bài test
-ở trên để kiểm tra cả luồng baseline từ BRAM và đường DMA.
-
-Synthesis đối chứng trên `xc7a200tfbg676-1` bằng Vivado 2025.2: tổng LUT SoC
-giảm từ **5097 xuống 4235** (giảm 862 LUT, 16,9%); LUTRAM giảm từ 1734 xuống
-966 và BRAM tile tăng từ 7 lên 8. `frame_mem` được ánh xạ vào một RAMB36E1.
-Đây là số liệu synthesis, chưa phải sau place/route. Báo cáo và log kiểm tra:
-`firmware/build/cnn_frame_bram_20261028/RESULT.md`.

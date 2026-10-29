@@ -8,7 +8,6 @@ foreach timing_name {conv1_rgb_weight.mem conv2_weight.mem conv3_weight.mem fc_w
 foreach timing_name {picorv32.v parallel.v soc_axi_top.v axi_uart_slave.v axi_spi_slave.v axi_i2c_slave.v CNN.v cnn_memory_subsystem.v cnn_docx_reference.v dma32_to_rgb24.v picorv32_axi4_bram_adapter.v axi4_bram_slave.v soc_top.v} {
     read_verilog [file join $timing_input $timing_name]
 }
-read_xdc [file join $timing_input soc_top_board.xdc]
 read_xdc [file join $timing_input soc_top_100MHz.xdc]
 synth_design -top soc_top -part xc7a200tfbg676-2L -flatten_hierarchy none \
     -generic {CLK_FREQ=100000000 DDR_TX_PHASED_CLOCK=1}

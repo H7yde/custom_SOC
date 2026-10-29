@@ -3,7 +3,7 @@
 module tb_soc_axi_top;
 
 reg clk = 0, rst_n = 0;
-always #5 clk = ~clk;  // 100 MHz
+always #10 clk = ~clk;  // 50 MHz
 
 // --- Tín hiệu AXI4-Lite Master ---
 reg  [31:0] s_axi_awaddr  = 0;
@@ -43,7 +43,7 @@ localparam SPI_BASE  = 32'h4000_1000;
 localparam I2C_BASE  = 32'h4000_2000;
 
 soc_axi_top #(
-    .CLK_FREQ(100_000_000), 
+    .CLK_FREQ(50_000_000), 
     .BAUD_RATE(115200)
 ) u_dut (
     .clk(clk), .rst_n(rst_n),

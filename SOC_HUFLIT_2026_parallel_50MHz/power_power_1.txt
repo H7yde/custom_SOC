@@ -1,13 +1,13 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 -------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version     : Vivado v.2025.2 (win64) Build 6299465 Fri Nov 14 19:35:11 GMT 2025
-| Date             : Fri Aug 21 00:05:07 2026
-| Host             : MSI running 64-bit major release  (build 9200)
-| Command          : report_power -file D:/LAB/SOC_HUFLIT_2026_parallel_50MHz/power_power_1.txt -name power_1
+| Date             : Thu Oct 29 15:28:59 2026
+| Host             : PM32-PC07 running 64-bit major release  (build 9200)
+| Command          : report_power -file D:/custom_SOC-main/SOC_HUFLIT_2026_parallel_50MHz/power_power_1.txt -name power_1
 | Design           : soc_top
-| Device           : xc7a200tfbg676-2L
+| Device           : xc7z020iclg400-1L
 | Design State     : routed
-| Grade            : extended
+| Grade            : industrial
 | Process          : typical
 | Characterization : Production
 -------------------------------------------------------------------------------------------------------------------------------------------------
@@ -30,14 +30,14 @@ Table of Contents
 ----------
 
 +--------------------------+--------------+
-| Total On-Chip Power (W)  | 0.182        |
+| Total On-Chip Power (W)  | 1.783        |
 | Design Power Budget (W)  | Unspecified* |
 | Power Budget Margin (W)  | NA           |
-| Dynamic (W)              | 0.051        |
-| Device Static (W)        | 0.131        |
-| Effective TJA (C/W)      | 1.9          |
-| Max Ambient (C)          | 99.7         |
-| Junction Temperature (C) | 25.3         |
+| Dynamic (W)              | 1.665        |
+| Device Static (W)        | 0.118        |
+| Effective TJA (C/W)      | 11.5         |
+| Max Ambient (C)          | 79.4         |
+| Junction Temperature (C) | 45.6         |
 | Confidence Level         | Low          |
 | Setting File             | ---          |
 | Simulation Activity File | ---          |
@@ -52,17 +52,21 @@ Table of Contents
 +--------------------------+-----------+----------+-----------+-----------------+
 | On-Chip                  | Power (W) | Used     | Available | Utilization (%) |
 +--------------------------+-----------+----------+-----------+-----------------+
-| Clocks                   |     0.002 |        3 |       --- |             --- |
-| Slice Logic              |    <0.001 |     1166 |       --- |             --- |
-|   LUT as Logic           |    <0.001 |      458 |    134600 |            0.34 |
-|   Register               |    <0.001 |      573 |    269200 |            0.21 |
-|   CARRY4                 |    <0.001 |       56 |     33650 |            0.17 |
-|   LUT as Distributed RAM |    <0.001 |       32 |     46200 |            0.07 |
-|   Others                 |     0.000 |       22 |       --- |             --- |
-| Signals                  |    <0.001 |     1124 |       --- |             --- |
-| I/O                      |     0.047 |       78 |       400 |           19.50 |
-| Static Power             |     0.131 |          |           |                 |
-| Total                    |     0.182 |          |           |                 |
+| Clocks                   |     0.011 |        6 |       --- |             --- |
+| Slice Logic              |     0.003 |     9013 |       --- |             --- |
+|   LUT as Logic           |     0.002 |     3470 |     53200 |            6.52 |
+|   CARRY4                 |    <0.001 |      259 |     13300 |            1.95 |
+|   LUT as Distributed RAM |    <0.001 |     1732 |     17400 |            9.95 |
+|   Register               |    <0.001 |     2608 |    106400 |            2.45 |
+|   F7/F8 Muxes            |    <0.001 |      478 |     53200 |            0.90 |
+|   Others                 |     0.000 |      165 |       --- |             --- |
+| Signals                  |     0.004 |     6334 |       --- |             --- |
+| Block RAM                |     0.010 |        7 |       140 |            5.00 |
+| MMCM                     |     0.106 |        1 |         4 |           25.00 |
+| I/O                      |     0.014 |       45 |       125 |           36.00 |
+| PS7                      |     1.518 |        1 |       --- |             --- |
+| Static Power             |     0.118 |          |           |                 |
+| Total                    |     1.783 |          |           |                 |
 +--------------------------+-----------+----------+-----------+-----------------+
 
 
@@ -72,19 +76,26 @@ Table of Contents
 +-----------+-------------+-----------+-------------+------------+-------------+-------------+------------+
 | Source    | Voltage (V) | Total (A) | Dynamic (A) | Static (A) | Powerup (A) | Budget (A)  | Margin (A) |
 +-----------+-------------+-----------+-------------+------------+-------------+-------------+------------+
-| Vccint    |       1.000 |     0.036 |       0.006 |      0.030 |       NA    | Unspecified | NA         |
-| Vccaux    |       1.800 |     0.034 |       0.004 |      0.031 |       NA    | Unspecified | NA         |
-| Vcco33    |       3.300 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
+| Vccint    |       0.950 |     0.040 |       0.030 |      0.010 |       NA    | Unspecified | NA         |
+| Vccaux    |       1.800 |     0.073 |       0.059 |      0.014 |       NA    | Unspecified | NA         |
+| Vcco33    |       3.300 |     0.005 |       0.004 |      0.001 |       NA    | Unspecified | NA         |
 | Vcco25    |       2.500 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
-| Vcco18    |       1.800 |     0.026 |       0.021 |      0.005 |       NA    | Unspecified | NA         |
+| Vcco18    |       1.800 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
 | Vcco15    |       1.500 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
 | Vcco135   |       1.350 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
 | Vcco12    |       1.200 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
 | Vccaux_io |       1.800 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
-| Vccbram   |       1.000 |     0.001 |       0.000 |      0.001 |       NA    | Unspecified | NA         |
+| Vccbram   |       0.950 |     0.002 |       0.001 |      0.001 |       NA    | Unspecified | NA         |
 | MGTAVcc   |       1.000 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
 | MGTAVtt   |       1.200 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
-| Vccadc    |       1.800 |     0.020 |       0.000 |      0.020 |       NA    | Unspecified | NA         |
+| MGTVccaux |       1.800 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
+| Vccpint   |       1.000 |     0.737 |       0.715 |      0.022 |       NA    | Unspecified | NA         |
+| Vccpaux   |       1.800 |     0.059 |       0.050 |      0.009 |       NA    | Unspecified | NA         |
+| Vccpll    |       1.800 |     0.018 |       0.015 |      0.003 |       NA    | Unspecified | NA         |
+| Vcco_ddr  |       1.500 |     0.459 |       0.457 |      0.002 |       NA    | Unspecified | NA         |
+| Vcco_mio0 |       1.800 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
+| Vcco_mio1 |       1.800 |     0.000 |       0.000 |      0.000 |       NA    | Unspecified | NA         |
+| Vccadc    |       1.800 |     0.018 |       0.000 |      0.018 |       NA    | Unspecified | NA         |
 +-----------+-------------+-----------+-------------+------------+-------------+-------------+------------+
 
 
@@ -110,26 +121,28 @@ Table of Contents
 2.1 Environment
 ---------------
 
-+-----------------------+--------------------------+
-| Ambient Temp (C)      | 25.0                     |
-| ThetaJA (C/W)         | 1.9                      |
-| Airflow (LFM)         | 250                      |
-| Heat Sink             | medium (Medium Profile)  |
-| ThetaSA (C/W)         | 3.4                      |
-| Board Selection       | medium (10"x10")         |
-| # of Board Layers     | 12to15 (12 to 15 Layers) |
-| Board Temperature (C) | 25.0                     |
-+-----------------------+--------------------------+
++-----------------------+------------------------+
+| Ambient Temp (C)      | 25.0                   |
+| ThetaJA (C/W)         | 11.5                   |
+| Airflow (LFM)         | 250                    |
+| Heat Sink             | none                   |
+| ThetaSA (C/W)         | 0.0                    |
+| Board Selection       | medium (10"x10")       |
+| # of Board Layers     | 8to11 (8 to 11 Layers) |
+| Board Temperature (C) | 25.0                   |
++-----------------------+------------------------+
 
 
 2.2 Clock Constraints
 ---------------------
 
-+---------+--------+-----------------+
-| Clock   | Domain | Constraint (ns) |
-+---------+--------+-----------------+
-| sys_clk | clk    |            20.0 |
-+---------+--------+-----------------+
++-------------------------------+----------------------------------------------------------------------+-----------------+
+| Clock                         | Domain                                                               | Constraint (ns) |
++-------------------------------+----------------------------------------------------------------------+-----------------+
+| clk_fpga_0                    | u_ps7/inst/FCLK_CLK_unbuffered[0]                                    |            10.0 |
+| gen_phased_clock.feedback_raw | u_parallel_axi/u_ddr_result_serializer/gen_phased_clock.feedback_raw |            10.0 |
+| gen_phased_clock.shifted_raw  | u_parallel_axi/u_ddr_result_serializer/gen_phased_clock.shifted_raw  |            10.0 |
++-------------------------------+----------------------------------------------------------------------+-----------------+
 
 
 3. Detailed Reports
@@ -141,9 +154,15 @@ Table of Contents
 +-----------------------------+-----------+
 | Name                        | Power (W) |
 +-----------------------------+-----------+
-| soc_top                     |     0.051 |
-|   u_parallel_axi            |     0.003 |
-|     u_ddr_result_serializer |     0.002 |
+| soc_top                     |     1.665 |
+|   u_cnn                     |     0.011 |
+|     u_cnn_reference         |     0.008 |
+|   u_cnn_memory              |     0.007 |
+|   u_cpu                     |     0.005 |
+|   u_parallel_axi            |     0.109 |
+|     u_ddr_result_serializer |     0.107 |
+|   u_ps7                     |     1.518 |
+|     inst                    |     1.518 |
 +-----------------------------+-----------+
 
 

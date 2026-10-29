@@ -23,6 +23,9 @@ $globalModule = Join-Path (Split-Path $VivadoBin -Parent) "data/verilog/src/glbl
 if ($BaudRate -le 0 -or $BaudRate -gt 1000000) { throw "Use a simulation baud rate between 1 and 1000000." }
 New-Item -ItemType Directory -Force -Path $simulationDirectory | Out-Null
 Copy-Item -LiteralPath $FirmwareHex -Destination (Join-Path $simulationDirectory "firmware.hex")
+foreach ($weightName in @("conv1_rgb_weight.mem", "conv2_weight.mem", "conv3_weight.mem", "fc_weight.mem")) {
+    Copy-Item -LiteralPath (Join-Path $rtlDirectory $weightName) -Destination $simulationDirectory
+}
 if ($FullImages) {
     Copy-Item -LiteralPath (Join-Path $repositoryDirectory "CNN_RTL/human_frames.mem") -Destination $simulationDirectory
     Copy-Item -LiteralPath (Join-Path $repositoryDirectory "CNN_RTL/nonhuman_frame.mem") -Destination $simulationDirectory

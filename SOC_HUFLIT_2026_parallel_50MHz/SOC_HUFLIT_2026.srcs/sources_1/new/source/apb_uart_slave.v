@@ -1,5 +1,5 @@
 module apb_uart_slave #(
-    parameter CLK_FREQ  = 100000000, // Tần số PCLK mặc định là 100MHz
+    parameter CLK_FREQ  = 125000000, // Tần số PCLK mặc định là 125MHz
     parameter BAUD_RATE = 115200
 )(
     input  wire        PCLK, PRESETn,

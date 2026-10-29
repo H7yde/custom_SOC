@@ -34,10 +34,10 @@ module cnn_docx_reference(
     reg signed [7:0] c3 [0:63], p3 [0:15];
 
     initial begin
-        $readmemh("D:/LAB/custom_SOC-main/SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/sources_1/new/source/conv1_rgb_weight.mem",w1);
-        $readmemh("D:/LAB/custom_SOC-main/SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/sources_1/new/source/conv2_weight.mem",w2);
-        $readmemh("D:/LAB/custom_SOC-main/SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/sources_1/new/source/conv3_weight.mem",w3);
-        $readmemh("D:/LAB/custom_SOC-main/SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/sources_1/new/source/fc_weight.mem",wf);
+        $readmemh("conv1_rgb_weight.mem",w1);
+        $readmemh("conv2_weight.mem",w2);
+        $readmemh("conv3_weight.mem",w3);
+        $readmemh("fc_weight.mem",wf);
     end
 
     function [7:0] normalize;

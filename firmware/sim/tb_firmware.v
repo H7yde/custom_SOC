@@ -4,25 +4,25 @@
 // The firmware is loaded by soc_top's normal $readmemh("firmware.hex").
 module tb_firmware;
     parameter integer BAUD_RATE = 1000000;
-    localparam integer CLK_FREQ = 100000000;
+    localparam integer CLK_FREQ = 125000000;
     localparam integer BIT_CLOCKS = CLK_FREQ / BAUD_RATE;
-    localparam integer BIT_NS = 10 * BIT_CLOCKS;
+    localparam integer BIT_NS = (1000000000 / CLK_FREQ) * BIT_CLOCKS;
 
     reg clk = 0;
     reg resetn = 0;
     reg uart_rx = 1;
     wire uart_tx;
-    wire cpu_trap;
-    always #5 clk = ~clk;
+    wire cpu_trap = dut.u_cpu.trap;
+    tri sda;
+    always #4 clk = ~clk;
 
     soc_top #(.CLK_FREQ(CLK_FREQ), .BAUD_RATE(BAUD_RATE)) dut (
         .clk(clk), .resetn(resetn),
         .uart_tx(uart_tx), .uart_rx(uart_rx),
         .spi_sclk(), .spi_mosi(), .spi_miso(1'b0), .spi_cs(),
-        .scl_out(), .sda_out(), .sda_oe(), .sda_in(1'b1),
-        .ddr_data_in(32'b0), .ddr_rx_valid(1'b0),
-        .ddr_data(), .ddr_clk_out(), .ddr_valid(), .ddr_done(),
-        .cpu_trap(cpu_trap)
+        .scl_out(), .sda(sda),
+        .ddr_data_in(16'b0), .ddr_rx_valid(1'b0),
+        .ddr_data(), .ddr_clk_out(), .ddr_valid(), .ddr_done()
     );
 
     reg [23:0] human_pixels [0:1023];
@@ -182,8 +182,8 @@ module tb_firmware;
                    cnn_done_count, dma_read_count);
 
         if ($test$plusargs("FULL_IMAGES")) begin
-            $readmemh("D:/SoC/custom_SOC-main/custom_SOC-main/CNN_RTL/human_frames.mem", human_pixels);
-            $readmemh("D:/SoC/custom_SOC-main/custom_SOC-main/CNN_RTL/nonhuman_frame.mem", nonhuman_pixels);
+            $readmemh("human_frames.mem", human_pixels);
+            $readmemh("nonhuman_frame.mem", nonhuman_pixels);
             first_result = result_count;
             expected_image = 1;
             upload_frame("B", 1);

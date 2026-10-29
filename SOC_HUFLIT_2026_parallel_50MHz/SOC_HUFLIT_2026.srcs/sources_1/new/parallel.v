@@ -94,57 +94,65 @@ endmodule
 // 3. ODDR Serializer
 // ------------------------------------------------------------
 module ddr_result_serializer #(
-    parameter DATA_WIDTH = 32,
-    parameter CLK_FREQ = 100_000_000,
-    parameter PHASED_CLOCK = 0
+    parameter DATA_WIDTH = 16,
+    parameter CLK_FREQ = 125_000_000,
+    parameter PHASED_CLOCK = 1
 )(
     input  wire                  clk,
     input  wire                  rst_n,
     input  wire                  load,
-    input  wire [DATA_WIDTH-1:0] data_rise_0,
-    input  wire [DATA_WIDTH-1:0] data_fall_0,
-    input  wire [DATA_WIDTH-1:0] data_rise_1,
-    input  wire [DATA_WIDTH-1:0] data_fall_1,
+    input  wire [31:0] data_rise_0,
+    input  wire [31:0] data_fall_0,
+    input  wire [31:0] data_rise_1,
+    input  wire [31:0] data_fall_1,
     output wire [DATA_WIDTH-1:0] ddr_data,
     output wire                  ddr_clk_out,
     output reg                   ddr_valid,
     output reg                   ddr_done,
     output wire                  ddr_ready
 );
-    localparam PHASE_IDLE   = 2'd0;
-    localparam PHASE_SEND_0 = 2'd1;
-    localparam PHASE_SEND_1 = 2'd2;
-    localparam PHASE_DONE   = 2'd3;
+    localparam PHASE_IDLE    = 3'd0;
+    localparam PHASE_SEND0_L = 3'd1;
+    localparam PHASE_SEND0_H = 3'd2;
+    localparam PHASE_SEND1_L = 3'd3;
+    localparam PHASE_SEND1_H = 3'd4;
+    localparam PHASE_DONE    = 3'd5;
 
-    reg [1:0] phase;
-    reg [DATA_WIDTH-1:0] rise_word;
-    reg [DATA_WIDTH-1:0] fall_word;
+    reg [2:0] phase;
+    reg [31:0] rise_word_0, fall_word_0;
+    reg [31:0] rise_word_1, fall_word_1;
+    reg [DATA_WIDTH-1:0] tx_rise_half, tx_fall_half;
+
+    always @* begin
+        tx_rise_half = {DATA_WIDTH{1'b0}};
+        tx_fall_half = {DATA_WIDTH{1'b0}};
+        case (phase)
+            PHASE_SEND0_L: begin tx_rise_half = rise_word_0[15:0]; tx_fall_half = fall_word_0[15:0]; end
+            PHASE_SEND0_H: begin tx_rise_half = rise_word_0[31:16]; tx_fall_half = fall_word_0[31:16]; end
+            PHASE_SEND1_L: begin tx_rise_half = rise_word_1[15:0]; tx_fall_half = fall_word_1[15:0]; end
+            PHASE_SEND1_H: begin tx_rise_half = rise_word_1[31:16]; tx_fall_half = fall_word_1[31:16]; end
+            default: begin end
+        endcase
+    end
 
     wire forwarded_clk, serializer_clk;
-    wire serializer_reset_n;
+    wire serializer_reset_n, forwarded_reset_n;
     generate
         if (PHASED_CLOCK) begin : gen_phased_clock
-            // Use integer MMCM dividers because Artix-7 does not support
-            // fine phase shift with a fractional CLKOUT0 divider. At 100 MHz,
-            // M=O=12 gives a 1.2 GHz VCO; 219 steps give 3.258929 ns.
-            localparam real MMCM_VCO_HZ = 1200000000.0;
-            localparam real CLOCK_RATIO = MMCM_VCO_HZ / CLK_FREQ;
-            localparam integer PHASE_STEPS = 219;
-            localparam real OUTPUT_PHASE_DEG =
-                PHASE_STEPS * 360.0 / (56.0 * CLOCK_RATIO);
+            localparam real CLOCK_RATIO = 1000000000.0 / CLK_FREQ;
             wire feedback_raw, feedback, shifted_raw, locked;
             (* ASYNC_REG = "TRUE" *) reg [1:0] lock_release = 0;
+            (* ASYNC_REG = "TRUE" *) reg [1:0] forwarded_lock_release = 0;
             MMCME2_ADV #(
                 .CLKIN1_PERIOD(1000000000.0 / CLK_FREQ),
                 .CLKFBOUT_MULT_F(CLOCK_RATIO), .DIVCLK_DIVIDE(1),
-                .CLKOUT0_DIVIDE_F(CLOCK_RATIO), .CLKOUT0_PHASE(OUTPUT_PHASE_DEG),
+                .CLKOUT0_DIVIDE_F(CLOCK_RATIO), .CLKOUT0_PHASE(116.357143),
                 .CLKOUT0_USE_FINE_PS("TRUE"), .COMPENSATION("BUF_IN"),
                 .STARTUP_WAIT("FALSE")
             ) u_tx_mmcm (
                 .CLKIN1(clk), .CLKFBIN(feedback), .CLKFBOUT(feedback_raw),
                 .CLKIN2(1'b0), .CLKINSEL(1'b1),
                 .CLKOUT0(shifted_raw), .LOCKED(locked), .RST(~rst_n), .PWRDWN(1'b0),
-                // UG472 requires PSCLK even for a fixed initial fine phase.
                 .PSCLK(clk), .PSEN(1'b0), .PSINCDEC(1'b0), .PSDONE(),
                 .DCLK(1'b0), .DEN(1'b0), .DWE(1'b0), .DADDR(7'b0), .DI(16'b0),
                 .DO(), .DRDY(), .CLKINSTOPPED(), .CLKFBSTOPPED(),
@@ -156,18 +164,24 @@ module ddr_result_serializer #(
             BUFG u_forwarded_bufg (.I(shifted_raw), .O(forwarded_clk));
             assign serializer_clk = clk;
             always @(posedge clk or negedge rst_n) begin
-                if (!rst_n) lock_release<=0;
-                else if (!locked) lock_release<=0;
-                else lock_release<={lock_release[0],1'b1};
+                if (!rst_n) lock_release <= 0;
+                else if (!locked) lock_release <= 0;
+                else lock_release <= {lock_release[0], 1'b1};
             end
+            always @(posedge forwarded_clk or negedge rst_n) begin
+                if (!rst_n) forwarded_lock_release <= 0;
+                else if (!locked) forwarded_lock_release <= 0;
+                else forwarded_lock_release <= {forwarded_lock_release[0], 1'b1};
+            end
+            assign forwarded_reset_n = rst_n && locked && forwarded_lock_release[1];
             assign serializer_reset_n = rst_n && lock_release[1];
         end else begin : gen_original_clock
             assign forwarded_clk = clk;
             assign serializer_clk = clk;
             assign serializer_reset_n = rst_n;
+            assign forwarded_reset_n = rst_n;
         end
-    endgenerate
-    assign ddr_ready = serializer_reset_n && (phase == PHASE_IDLE);
+    endgenerate    assign ddr_ready = serializer_reset_n && (phase == PHASE_IDLE);
 
     genvar bit_index;
     generate
@@ -178,32 +192,38 @@ module ddr_result_serializer #(
                 .SRTYPE       ("SYNC")
             ) u_oddr (
                 .Q  (ddr_data[bit_index]), .C  (serializer_clk), .CE (1'b1),
-                .D1 (rise_word[bit_index]), .D2 (fall_word[bit_index]),
+                .D1 (tx_rise_half[bit_index]), .D2 (tx_fall_half[bit_index]),
                 .R  (~serializer_reset_n), .S  (1'b0)
             );
         end
     endgenerate
 
-    ODDR #(.DDR_CLK_EDGE ("SAME_EDGE"), .INIT (1'b0), .SRTYPE ("SYNC")) 
+    // Keep the forwarded clock free-running through reset; data/valid outputs
+    // remain inactive until the shared MMCM lock has been synchronized.
+    ODDR #(.DDR_CLK_EDGE ("SAME_EDGE"), .INIT (1'b0), .SRTYPE ("SYNC"))
     u_oddr_clk (
-        .Q(ddr_clk_out), .C(forwarded_clk), .CE(1'b1), .D1(1'b0), .D2(1'b1), .R(~serializer_reset_n), .S(1'b0)
+        .Q(ddr_clk_out), .C(forwarded_clk), .CE(1'b1), .D1(1'b0), .D2(1'b1), .R(1'b0), .S(1'b0)
     );
 
     always @(posedge serializer_clk or negedge serializer_reset_n) begin
         if (!serializer_reset_n) begin
-            phase <= PHASE_IDLE; rise_word <= 0; fall_word <= 0; ddr_valid <= 0; ddr_done <= 0;
+            phase <= PHASE_IDLE;
+            rise_word_0 <= 0; fall_word_0 <= 0; rise_word_1 <= 0; fall_word_1 <= 0;
+            ddr_valid <= 0; ddr_done <= 0;
         end else begin
             ddr_done <= 1'b0;
             case (phase)
                 PHASE_IDLE: begin
                     if (load) begin
-                        rise_word <= data_rise_0; fall_word <= data_fall_0; phase <= PHASE_SEND_0;
+                        rise_word_0 <= data_rise_0; fall_word_0 <= data_fall_0;
+                        rise_word_1 <= data_rise_1; fall_word_1 <= data_fall_1;
+                        phase <= PHASE_SEND0_L;
                     end
                 end
-                PHASE_SEND_0: begin
-                    rise_word <= data_rise_1; fall_word <= data_fall_1; ddr_valid <= 1'b1; phase <= PHASE_SEND_1;
-                end
-                PHASE_SEND_1: phase <= PHASE_DONE;
+                PHASE_SEND0_L: begin ddr_valid <= 1'b1; phase <= PHASE_SEND0_H; end
+                PHASE_SEND0_H: phase <= PHASE_SEND1_L;
+                PHASE_SEND1_L: phase <= PHASE_SEND1_H;
+                PHASE_SEND1_H: phase <= PHASE_DONE;
                 default: begin ddr_valid <= 1'b0; ddr_done <= 1'b1; phase <= PHASE_IDLE; end
             endcase
         end
@@ -257,15 +277,13 @@ endmodule
 // ------------------------------------------------------------
 // 5. Module TOP (AXI4-Lite Wrapper)
 // ------------------------------------------------------------
-    module parallel_axi #(
+module parallel_axi #(
     parameter NUM_LANES = 4,
-    parameter CLK_FREQ = 100_000_000,
-    parameter DDR_TX_PHASED_CLOCK = 0
+    parameter CLK_FREQ = 125_000_000,
+    parameter DDR_TX_PHASED_CLOCK = 1
 )(
     input  wire        clk,
     input  wire        rst_n,
-
-    // --- AXI4-Lite Slave Interface ---
     input  wire [31:0] S_AXI_AWADDR,
     input  wire        S_AXI_AWVALID,
     output wire        S_AXI_AWREADY,
@@ -283,18 +301,15 @@ endmodule
     output wire [ 1:0] S_AXI_RRESP,
     output wire        S_AXI_RVALID,
     input  wire        S_AXI_RREADY,
-
-    // --- IDDR / ODDR Interface ---
-    input  wire [31:0] ddr_data_in,
+    input  wire [15:0] ddr_data_in,
     input  wire        ddr_rx_valid,
     output wire [31:0] result_out,
     output wire        result_valid,
-    output wire [31:0] ddr_data,
+    output wire [15:0] ddr_data,
     output wire        ddr_clk_out,
     output wire        ddr_valid,
     output wire        ddr_done
 );
-
     localparam [7:0] REG_CTRL_STATUS = 8'h00;
     localparam [7:0] REG_A_BASE      = 8'h10;
     localparam [7:0] REG_B_BASE      = 8'h20;
@@ -356,7 +371,7 @@ endmodule
     // ==========================================
     // TẠO TRỄ ĐỒNG BỘ 1 CHU KỲ (PIPELINE MATCHING)
     // ==========================================
-    wire [31:0] iddr_data_rise, iddr_data_fall;
+    wire [15:0] iddr_data_rise, iddr_data_fall;
     
     // Sử dụng thanh ghi dịch 2-bit để tạo trễ chính xác 2 clock
     reg [1:0] ddr_rx_valid_shift; 
@@ -365,18 +380,49 @@ endmodule
         else        ddr_rx_valid_shift <= {ddr_rx_valid_shift[0], ddr_rx_valid};
     end
 
-    iddr_result_deserializer #(.DATA_WIDTH(32)) u_iddr_rx (
+    iddr_result_deserializer #(.DATA_WIDTH(16)) u_iddr_rx (
         .clk(clk), .rst_n(rst_n), .ddr_data_in(ddr_data_in),
         .data_rise(iddr_data_rise), .data_fall(iddr_data_fall), .rx_valid() 
     );
+
+    // The 16-bit full-duplex input transfers low halves, then high halves.
+    // ddr_rx_valid must cover both beats of each 32-bit DDR word pair.
+    reg rx_half;
+    reg [15:0] rx_rise_low, rx_fall_low;
+    reg [31:0] assembled_rise, assembled_fall;
+    reg assembled_valid;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            rx_half <= 1'b0;
+            rx_rise_low <= 16'b0;
+            rx_fall_low <= 16'b0;
+            assembled_rise <= 32'b0;
+            assembled_fall <= 32'b0;
+            assembled_valid <= 1'b0;
+        end else begin
+            assembled_valid <= 1'b0;
+            if (!ddr_rx_valid_shift[1]) begin
+                rx_half <= 1'b0;
+            end else if (!rx_half) begin
+                rx_rise_low <= iddr_data_rise;
+                rx_fall_low <= iddr_data_fall;
+                rx_half <= 1'b1;
+            end else begin
+                assembled_rise <= {iddr_data_rise, rx_rise_low};
+                assembled_fall <= {iddr_data_fall, rx_fall_low};
+                assembled_valid <= 1'b1;
+                rx_half <= 1'b0;
+            end
+        end
+    end
 
     wire [NUM_LANES-1:0] dist_lane_valid;
     wire [31:0] dist_lane_data_0, dist_lane_data_1, dist_lane_data_2, dist_lane_data_3;
 
     independent_lane_distributor #(.NUM_LANES(NUM_LANES), .DATA_WIDTH(32)) u_distributor (
         .clk(clk), .rst_n(rst_n), 
-        .rx_valid(ddr_rx_valid_shift[1]), // <--- LẤY TÍN HIỆU BIT [1] (ĐÃ TRỄ ĐÚNG 2 CHU KỲ)
-        .data_rise(iddr_data_rise), .data_fall(iddr_data_fall),
+        .rx_valid(assembled_valid),
+        .data_rise(assembled_rise), .data_fall(assembled_fall),
         .lane_ready(~start_pending), 
         .lane_valid(dist_lane_valid),
         .lane_data_0(dist_lane_data_0), .lane_data_1(dist_lane_data_1),
@@ -386,7 +432,7 @@ endmodule
     wire all_results_valid = &result_valid_reg;
     wire load_serializer = all_results_valid & ddr_ready;
 
-    ddr_result_serializer #(.DATA_WIDTH(32), .CLK_FREQ(CLK_FREQ),
+    ddr_result_serializer #(.DATA_WIDTH(16), .CLK_FREQ(CLK_FREQ),
         .PHASED_CLOCK(DDR_TX_PHASED_CLOCK)) u_ddr_result_serializer (
         .clk(clk), .rst_n(rst_n), .load(load_serializer),
         .data_rise_0(result_flat[31:0]), .data_fall_0(result_flat[63:32]),

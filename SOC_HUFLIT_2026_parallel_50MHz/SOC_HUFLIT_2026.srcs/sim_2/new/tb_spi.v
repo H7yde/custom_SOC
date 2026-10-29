@@ -36,7 +36,7 @@ module tb_spi;
     integer   slave_bit_idx = 0;
 
     soc_axi_top #(
-        .CLK_FREQ  (100_000_000),
+        .CLK_FREQ  (50_000_000),
         .BAUD_RATE (115200)
     ) dut (
         .clk      (clk), 

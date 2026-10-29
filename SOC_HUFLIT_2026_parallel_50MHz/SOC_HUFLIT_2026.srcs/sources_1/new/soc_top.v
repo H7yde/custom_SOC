@@ -1,12 +1,13 @@
 `timescale 1ns / 1ps
 
 module soc_top #(
-    parameter CLK_FREQ  = 100_000_000,
+    // The PYNQ-Z2 H16 reference drives the SoC directly at 125 MHz.
+    parameter CLK_FREQ  = 125_000_000,
     parameter BAUD_RATE = 115200,
     parameter ENABLE_MUL = 0,
     parameter ENABLE_DIV = 0,
     parameter ENABLE_IRQ = 1,
-    parameter DDR_TX_PHASED_CLOCK = 0
+    parameter DDR_TX_PHASED_CLOCK = 1
 )(
     input  wire        clk,
     input  wire        resetn,
@@ -21,20 +22,34 @@ module soc_top #(
     output wire        spi_cs,
 
     output wire        scl_out,
-    output wire        sda_out,
-    output wire        sda_oe,
-    input  wire        sda_in,
+    inout  wire        sda,
 
     // --- IDDR / ODDR Stream Pins ---
-    input  wire [31:0] ddr_data_in,
+    input  wire [15:0] ddr_data_in,
     input  wire        ddr_rx_valid,
-    output wire [31:0] ddr_data,
+    output wire [15:0] ddr_data,
     output wire        ddr_clk_out,
     output wire        ddr_valid,
-    output wire        ddr_done,
+    output wire        ddr_done
 
-    output wire        cpu_trap
 );
+
+    wire sda_out_int, sda_oe_int, sda_in_int;
+    IOBUF u_i2c_sda_iobuf (
+        .I(sda_out_int), .T(~sda_oe_int), .O(sda_in_int), .IO(sda)
+    );
+
+    wire core_clk;
+    BUFG u_core_clock_bufg (.I(clk), .O(core_clk));
+
+    (* ASYNC_REG = "TRUE" *) reg [1:0] core_reset_release = 2'b00;
+
+    // Assert reset asynchronously; release it after two core clock edges.
+    always @(posedge core_clk or negedge resetn) begin
+        if (!resetn) core_reset_release <= 2'b00;
+        else core_reset_release <= {core_reset_release[0], 1'b1};
+    end
+    wire core_resetn = resetn && core_reset_release[1];
 
     wire        mem_valid, mem_instr;
     wire        mem_ready;
@@ -43,7 +58,7 @@ module soc_top #(
     wire [ 3:0] mem_wstrb;
 
     // --------------------------------------------------------
-    // PicoRV32 CPU (Sử dụng Native Memory Interface để nạp lệnh siêu tốc)
+    // PicoRV32 CPU (Sá»­ dá»¥ng Native Memory Interface Ä‘á»ƒ náº¡p lá»‡nh siÃªu tá»‘c)
     // --------------------------------------------------------
     picorv32 #(
         .ENABLE_COUNTERS  (1),
@@ -55,9 +70,9 @@ module soc_top #(
         .PROGADDR_RESET   (32'h0000_0000),
         .STACKADDR        (32'h0000_0FF0)
     ) u_cpu (
-        .clk      (clk),
-        .resetn   (resetn),
-        .trap     (cpu_trap),
+        .clk      (core_clk),
+        .resetn   (core_resetn),
+        .trap     (),
         .mem_valid(mem_valid),
         .mem_instr(mem_instr),
         .mem_ready(mem_ready),
@@ -65,7 +80,7 @@ module soc_top #(
         .mem_wdata(mem_wdata),
         .mem_wstrb(mem_wstrb),
         .mem_rdata(mem_rdata),
-        .mem_la_read (), .mem_la_write(), .mem_la_addr(),
+        .mem_la_read (), .mem_la_write(), .mem_la_addr(), .mem_la_wdata(), .mem_la_wstrb(),
         .pcpi_valid(), .pcpi_insn(), .pcpi_rs1(), .pcpi_rs2(),
         .pcpi_wr(1'b0), .pcpi_rd(32'h0),
         .pcpi_wait(1'b0), .pcpi_ready(1'b0),
@@ -74,17 +89,17 @@ module soc_top #(
     );
 
     // --------------------------------------------------------
-    // Rẽ nhánh Bộ nhớ: BRAM (Native) vs MMIO Ngoại vi (AXI)
+    // Ráº½ nhÃ¡nh Bá»™ nhá»›: BRAM (Native) vs MMIO Ngoáº¡i vi (AXI)
     // --------------------------------------------------------
     wire is_bram = (mem_addr[31:28] == 4'h0); // 0x0000_0000 -> BRAM
-    wire is_mmio = (mem_addr[31:28] == 4'h4); // 0x4000_0000 -> Ngoại vi
+    wire is_mmio = (mem_addr[31:28] == 4'h4); // 0x4000_0000 -> Ngoáº¡i vi
 
     wire        bram_ready;
     wire [31:0] bram_rdata;
     wire        mmio_ready;
     wire [31:0] mmio_rdata;
 
-    // CPU nhận kết quả từ BRAM hoặc từ khối AXI MMIO
+    // CPU nháº­n káº¿t quáº£ tá»« BRAM hoáº·c tá»« khá»‘i AXI MMIO
     assign mem_ready = is_bram ? bram_ready : (is_mmio ? mmio_ready : 1'b0);
     wire [31:0] mem_rdata_wire = is_bram ? bram_rdata : (is_mmio ? mmio_rdata : 32'h0);
     assign mem_rdata = mem_rdata_wire;
@@ -150,7 +165,7 @@ module soc_top #(
     reg [31:0] bram_mem_rd_data;
 
     picorv32_axi4_bram_adapter u_bram_axi_adapter (
-        .clk(clk), .resetn(resetn),
+        .clk(core_clk), .resetn(core_resetn),
         .mem_valid(mem_valid && is_bram), .mem_instr(mem_instr),
         .mem_addr(mem_addr), .mem_wdata(mem_wdata), .mem_wstrb(mem_wstrb),
         .mem_ready(bram_ready), .mem_rdata(bram_rdata), .fault(bram_axi_fault),
@@ -201,7 +216,7 @@ module soc_top #(
     );
 
     axi4_bram_slave u_bram_axi (
-        .ACLK(clk), .ARESETn(resetn),
+        .ACLK(core_clk), .ARESETn(core_resetn),
         .S_AXI_AWID(bram_axi_awid),
         .S_AXI_AWADDR(bram_axi_awaddr),
         .S_AXI_AWLEN(bram_axi_awlen),
@@ -254,8 +269,8 @@ module soc_top #(
 
     // Synchronous read-first BRAM backend. The AXI controller validates
     // addresses before asserting enables; the original bram hierarchy is kept.
-    always @(posedge clk) begin
-        if (resetn) begin
+    always @(posedge core_clk) begin
+        if (core_resetn) begin
             if (bram_mem_rd_en)
                 bram_mem_rd_data <= bram[bram_mem_rd_index];
             if (bram_mem_wr_en) begin
@@ -269,7 +284,7 @@ module soc_top #(
 
 
     // ========================================================
-    // BỘ CHUYỂN ĐỔI (NATIVE to AXI4-LITE MASTER)
+    // Bá»˜ CHUYá»‚N Äá»”I (NATIVE to AXI4-LITE MASTER)
     // ========================================================
     wire        axi_m_awvalid, axi_m_awready;
     wire [31:0] axi_m_awaddr;
@@ -285,15 +300,15 @@ module soc_top #(
     wire [31:0] axi_m_rdata;
 
     picorv32_axi_adapter u_axi_adapter (
-        .clk            (clk),
-        .resetn         (resetn),
+        .clk            (core_clk),
+        .resetn         (core_resetn),
         // AXI4-Lite Master Output
         .mem_axi_awvalid(axi_m_awvalid), .mem_axi_awready(axi_m_awready), .mem_axi_awaddr (axi_m_awaddr), .mem_axi_awprot(axi_m_awprot),
         .mem_axi_wvalid (axi_m_wvalid),  .mem_axi_wready (axi_m_wready),  .mem_axi_wdata  (axi_m_wdata),  .mem_axi_wstrb (axi_m_wstrb),
         .mem_axi_bvalid (axi_m_bvalid),  .mem_axi_bready (axi_m_bready),
         .mem_axi_arvalid(axi_m_arvalid), .mem_axi_arready(axi_m_arready), .mem_axi_araddr (axi_m_araddr), .mem_axi_arprot(axi_m_arprot),
         .mem_axi_rvalid (axi_m_rvalid),  .mem_axi_rready (axi_m_rready),  .mem_axi_rdata  (axi_m_rdata),
-        // Native Input (Chỉ kích hoạt khi là MMIO)
+        // Native Input (Chá»‰ kÃ­ch hoáº¡t khi lÃ  MMIO)
         .mem_valid      (mem_valid && is_mmio),
         .mem_instr      (mem_instr),
         .mem_ready      (mmio_ready),
@@ -304,7 +319,7 @@ module soc_top #(
     );
 
     // ========================================================
-    // 1-to-2 AXI CROSSBAR (Bộ định tuyến AXI)
+    // 1-to-2 AXI CROSSBAR (Bá»™ Ä‘á»‹nh tuyáº¿n AXI)
     // ========================================================
     wire aw_sel_parallel = (axi_m_awaddr[31:12] == 20'h40003);
     wire aw_sel_cnn      = (axi_m_awaddr[31:12] == 20'h40004);
@@ -316,10 +331,10 @@ module soc_top #(
     wire ar_sel_cnn_mem  = (axi_m_araddr[31:13] == 19'h20003);
     wire ar_sel_periph   = (axi_m_araddr[31:12] >= 20'h40000 && axi_m_araddr[31:12] <= 20'h40002);
 
-    // Chốt mục tiêu Ghi (Write Latch) - Sửa điều kiện bẻ khóa Deadlock
+    // Chá»‘t má»¥c tiÃªu Ghi (Write Latch) - Sá»­a Ä‘iá»u kiá»‡n báº» khÃ³a Deadlock
     reg [3:0] w_target; // [3]: CNN memory, [2]: CNN, [1]: parallel, [0]: periph
-    always @(posedge clk) begin
-        if (!resetn) w_target <= 4'b0000;
+    always @(posedge core_clk) begin
+        if (!core_resetn) w_target <= 4'b0000;
         else if (axi_m_awvalid && !axi_m_bvalid)
             w_target <= {aw_sel_cnn_mem, aw_sel_cnn, aw_sel_parallel, aw_sel_periph};
         else if (axi_m_bvalid && axi_m_bready) w_target <= 4'b0000;
@@ -327,10 +342,10 @@ module soc_top #(
     wire [3:0] act_w_target = (w_target != 4'b0000) ? w_target :
                               (axi_m_awvalid ? {aw_sel_cnn_mem, aw_sel_cnn, aw_sel_parallel, aw_sel_periph} : 4'b0000);
 
-    // Chốt mục tiêu Đọc (Read Latch) - Sửa điều kiện bẻ khóa Deadlock
+    // Chá»‘t má»¥c tiÃªu Äá»c (Read Latch) - Sá»­a Ä‘iá»u kiá»‡n báº» khÃ³a Deadlock
     reg [3:0] r_target;
-    always @(posedge clk) begin
-        if (!resetn) r_target <= 4'b0000;
+    always @(posedge core_clk) begin
+        if (!core_resetn) r_target <= 4'b0000;
         else if (axi_m_arvalid && !axi_m_rvalid)
             r_target <= {ar_sel_cnn_mem, ar_sel_cnn, ar_sel_parallel, ar_sel_periph};
         else if (axi_m_rvalid && axi_m_rready) r_target <= 4'b0000;
@@ -338,12 +353,12 @@ module soc_top #(
     wire [3:0] act_r_target = (r_target != 4'b0000) ? r_target :
                               (axi_m_arvalid ? {ar_sel_cnn_mem, ar_sel_cnn, ar_sel_parallel, ar_sel_periph} : 4'b0000);
 
-    // Tín hiệu AXI cho Nhóm Periph (UART, SPI, I2C)
+    // TÃ­n hiá»‡u AXI cho NhÃ³m Periph (UART, SPI, I2C)
     wire axi_periph_awready, axi_periph_wready, axi_periph_bvalid, axi_periph_arready, axi_periph_rvalid;
     wire [1:0] axi_periph_bresp, axi_periph_rresp;
     wire [31:0] axi_periph_rdata;
 
-    // Tín hiệu AXI cho Khối Parallel DDR
+    // TÃ­n hiá»‡u AXI cho Khá»‘i Parallel DDR
     wire axi_parallel_awready, axi_parallel_wready, axi_parallel_bvalid, axi_parallel_arready, axi_parallel_rvalid;
     wire [1:0] axi_parallel_bresp, axi_parallel_rresp;
     wire [31:0] axi_parallel_rdata;
@@ -366,7 +381,7 @@ module soc_top #(
     wire        cnn_dma_rvalid;
     wire        cnn_dma_rready;
 
-    // --- Ghép kênh trả về CPU (Mux) ---
+    // --- GhÃ©p kÃªnh tráº£ vá» CPU (Mux) ---
     assign axi_m_awready = (act_w_target[3] & axi_cnn_mem_awready) |
                            (act_w_target[2] & axi_cnn_awready) |
                            (act_w_target[1] & axi_parallel_awready) |
@@ -375,10 +390,14 @@ module soc_top #(
                            (act_w_target[2] & axi_cnn_wready) |
                            (act_w_target[1] & axi_parallel_wready) |
                            (act_w_target[0] & axi_periph_wready);
-    assign axi_m_bvalid  = (act_w_target[3] & axi_cnn_mem_bvalid) |
-                           (act_w_target[2] & axi_cnn_bvalid) |
-                           (act_w_target[1] & axi_parallel_bvalid) |
-                           (act_w_target[0] & axi_periph_bvalid);
+    // All attached slaves register BVALID/RVALID. Their response can therefore
+    // use the target captured when the address was presented. Keep the live
+    // address bypass on request READY only; using it on response VALID creates
+    // a long combinational path from the CPU address back into CPU mem_ready.
+    assign axi_m_bvalid  = (w_target[3] & axi_cnn_mem_bvalid) |
+                           (w_target[2] & axi_cnn_bvalid) |
+                           (w_target[1] & axi_parallel_bvalid) |
+                           (w_target[0] & axi_periph_bvalid);
     assign axi_m_bresp   = act_w_target[3] ? axi_cnn_mem_bresp :
                            act_w_target[2] ? axi_cnn_bresp :
                            act_w_target[1] ? axi_parallel_bresp :
@@ -388,30 +407,30 @@ module soc_top #(
                            (act_r_target[2] & axi_cnn_arready) |
                            (act_r_target[1] & axi_parallel_arready) |
                            (act_r_target[0] & axi_periph_arready);
-    assign axi_m_rvalid  = (act_r_target[3] & axi_cnn_mem_rvalid) |
-                           (act_r_target[2] & axi_cnn_rvalid) |
-                           (act_r_target[1] & axi_parallel_rvalid) |
-                           (act_r_target[0] & axi_periph_rvalid);
-    assign axi_m_rdata   = act_r_target[3] ? axi_cnn_mem_rdata :
-                           act_r_target[2] ? axi_cnn_rdata :
-                           act_r_target[1] ? axi_parallel_rdata :
+    assign axi_m_rvalid  = (r_target[3] & axi_cnn_mem_rvalid) |
+                           (r_target[2] & axi_cnn_rvalid) |
+                           (r_target[1] & axi_parallel_rvalid) |
+                           (r_target[0] & axi_periph_rvalid);
+    assign axi_m_rdata   = r_target[3] ? axi_cnn_mem_rdata :
+                           r_target[2] ? axi_cnn_rdata :
+                           r_target[1] ? axi_parallel_rdata :
                            axi_periph_rdata;
-    assign axi_m_rresp   = act_r_target[3] ? axi_cnn_mem_rresp :
-                           act_r_target[2] ? axi_cnn_rresp :
-                           act_r_target[1] ? axi_parallel_rresp :
+    assign axi_m_rresp   = r_target[3] ? axi_cnn_mem_rresp :
+                           r_target[2] ? axi_cnn_rresp :
+                           r_target[1] ? axi_parallel_rresp :
                            axi_periph_rresp;
 
     // ========================================================
-    // TÍCH HỢP NGOẠI VI (AXI SLAVES)
+    // TÃCH Há»¢P NGOáº I VI (AXI SLAVES)
     // ========================================================
     
-    // 1. Cụm thiết bị ngoại vi chuẩn (UART, SPI, I2C)
+    // 1. Cá»¥m thiáº¿t bá»‹ ngoáº¡i vi chuáº©n (UART, SPI, I2C)
     soc_axi_top #(
         .CLK_FREQ  (CLK_FREQ),
         .BAUD_RATE (BAUD_RATE)
     ) u_axi_periph (
-        .clk             (clk),
-        .rst_n           (resetn),
+        .clk             (core_clk),
+        .rst_n           (core_resetn),
         
         .S_AXI_AWADDR    (axi_m_awaddr),
         .S_AXI_AWVALID   (axi_m_awvalid & act_w_target[0]),
@@ -439,15 +458,15 @@ module soc_top #(
         .spi_miso        (spi_miso),
         .spi_cs          (spi_cs),
         .scl_out         (scl_out),
-        .sda_out         (sda_out),
-        .sda_oe          (sda_oe),
-        .sda_in          (sda_in)
+        .sda_out         (sda_out_int),
+        .sda_oe          (sda_oe_int),
+        .sda_in          (sda_in_int)
     );
 
-    // 2. Bộ Tăng tốc Song song DDR (IDDR & ODDR)
+    // 2. Bá»™ TÄƒng tá»‘c Song song DDR (IDDR & ODDR)
     parallel_axi #(.CLK_FREQ(CLK_FREQ), .DDR_TX_PHASED_CLOCK(DDR_TX_PHASED_CLOCK)) u_parallel_axi (
-        .clk             (clk),
-        .rst_n           (resetn),
+        .clk             (core_clk),
+        .rst_n           (core_resetn),
         
         .S_AXI_AWADDR    (axi_m_awaddr),
         .S_AXI_AWVALID   (axi_m_awvalid & act_w_target[1]),
@@ -480,8 +499,8 @@ module soc_top #(
 
     // 3. CNN AXI peripheral at base address 0x40004000.
     CNN u_cnn (
-        .clk             (clk),
-        .rst_n           (resetn),
+        .clk             (core_clk),
+        .rst_n           (core_resetn),
 
         .S_AXI_AWADDR    (axi_m_awaddr),
         .S_AXI_AWVALID   (axi_m_awvalid & act_w_target[2]),
@@ -518,8 +537,8 @@ module soc_top #(
         .BUFFER_WORDS(768),
         .TOTAL_WORDS (1536)
     ) u_cnn_memory (
-        .clk             (clk),
-        .rst_n           (resetn),
+        .clk             (core_clk),
+        .rst_n           (core_resetn),
 
         .S_AXI_AWADDR    (axi_m_awaddr),
         .S_AXI_AWVALID   (axi_m_awvalid & act_w_target[3]),

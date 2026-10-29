@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module axi_uart_slave #(
-    parameter CLK_FREQ  = 100000000, 
+    parameter CLK_FREQ  = 125000000, 
     parameter BAUD_RATE = 115200
 )(
     input wire clk,
@@ -150,7 +150,7 @@ module axi_uart_slave #(
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            rx_active <= 0; rx_clk_cnt <= 0; rx_bit_idx <= 0; rx_done <= 0;
+            rx_active <= 0; rx_clk_cnt <= 0; rx_bit_idx <= 0; rx_shift_data <= 8'h00; rx_done <= 0;
         end else begin
             if (rx_clear) rx_done <= 1'b0;
             

@@ -56,7 +56,7 @@ module tb_CNN;
         .S_AXI_RVALID  (rvalid),
         .S_AXI_RREADY  (rready)
     );
-    always #5 clk = ~clk;        // 100 MHz
+    always #10 clk = ~clk;       // 50 MHz
 
     // Write one AXI4-Lite transaction. CNN accepts address and data
     // independently, so this task waits for both handshakes.

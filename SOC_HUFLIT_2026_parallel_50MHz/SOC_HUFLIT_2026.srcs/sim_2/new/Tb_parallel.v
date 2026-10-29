@@ -85,7 +85,7 @@ module tb_parallel_axi;
     );
 
     // Clock Generation (T = 10ns, f = 100MHz)
-    always #5 clk = ~clk;
+    always #4 clk = ~clk;  // 125 MHz
 
     // Lấy mẫu tín hiệu xuất ra từ ODDR
     always @(posedge ddr_clk_out or negedge ddr_clk_out) begin

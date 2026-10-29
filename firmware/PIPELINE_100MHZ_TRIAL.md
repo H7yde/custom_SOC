@@ -1,13 +1,5 @@
 # Bản thử nghiệm pipeline CNN ở 100 MHz
 
-> Tài liệu lịch sử của đợt thử pipeline. Cập nhật trạng thái 28/10/2026:
-> core hiện có thêm clock gating và frame BRAM; project chọn
-> `xc7z020iclg400-1L`. Các số liệu Artix và cấu trúc run bên dưới không phải
-> kết quả của target Zynq hiện tại. RTL MMCM hiện dùng VCO 1,2 GHz, 219 bước
-> pha, khoảng 3,259 ns (117,054°) tại 100 MHz; `soc_top.v` mặc định tùy chọn
-> pha bằng 0, `.xpr` ghi đè bằng 1. Giá trị 115,071429°/1 GHz bên dưới mô tả
-> cấu hình của đợt thử cũ. Hướng dẫn hiện tại xem [README](../README.md).
-
 Các đường dẫn dưới đây tính từ thư mục gốc repository. Đây là bản sửa RTL để kiểm tra timing; firmware BRAM của CPU và vùng nhớ riêng của CNN vẫn độc lập.
 
 ## Thay đổi
@@ -15,7 +7,7 @@ Các đường dẫn dưới đây tính từ thư mục gốc repository. Đây
 - `cnn_docx_reference.v`: tách các bước tính địa chỉ, đọc bộ nhớ, chuẩn hóa pixel, nhân, cộng và ghi kết quả thành nhiều chu kỳ. Dùng bộ đếm theo hàng/kênh để giảm logic trên đường địa chỉ. Giữ nguyên định dạng dữ liệu, trọng số và kết quả tính toán.
 - `parallel.v`: thêm tùy chọn `DDR_TX_PHASED_CLOCK=1`. Serializer và ODDR dữ liệu dùng `sys_clk`; `MMCME2_ADV` tạo clock DDR chuyển tiếp với pha cố định 115,071429°, tương đương 3,196429 ns ở 100 MHz. Bật `CLKOUT0_USE_FINE_PS`, nối `PSCLK=clk`, giữ `PSEN=0` và `PSINCDEC=0`. Fine phase có bước 1/56 chu kỳ VCO; VCO ở đây là 1 GHz. Cấu hình này dùng khả năng fixed fine phase của [MMCM 7 Series, UG472](https://docs.amd.com/api/khub/documents/1kFbRqzm2fhwGy~cLQG2yA/content). Giá trị mặc định `0` giữ cách phát clock cũ.
 - `soc_top.v`: truyền tham số clock tới khối parallel; đọc ảnh firmware bằng tên `firmware.hex` để từng thư mục mô phỏng nạp đúng chương trình.
-- Giá trị mặc định trong RTL là `CLK_FREQ=100000000`, `DDR_TX_PHASED_CLOCK=1`. Profile 100 MHz đặt các giá trị tương ứng, chu kỳ clock 10 ns và `SLEW FAST` cho các ngõ ra DDR. Các giả thiết I/O giữ từ constraint cũ: setup 2 ns, hold 1 ns, lệch dây −0,1 đến +0,5 ns; tương ứng output delay max 2,5 ns và min −1,1 ns.
+- Giá trị mặc định trong RTL vẫn là `CLK_FREQ=50000000`, `DDR_TX_PHASED_CLOCK=0`. Profile 100 MHz đặt `CLK_FREQ=100000000`, `DDR_TX_PHASED_CLOCK=1`, chu kỳ clock 10 ns và `SLEW FAST` cho các ngõ ra DDR. Phải chọn profile trước khi synthesis bản 100 MHz. Các giả thiết I/O giữ từ constraint cũ: setup 2 ns, hold 1 ns, lệch dây −0,1 đến +0,5 ns; tương ứng output delay max 2,5 ns và min −1,1 ns.
 
 **Đổi lại, CNN cần nhiều chu kỳ hơn:** bài đối chiếu tăng từ 129.121 lên 765.461 chu kỳ, khoảng 5,9 lần. Trong mô phỏng SoC, một lần tính khoảng 768.278 chu kỳ, tương đương 7,68 ms ở 100 MHz. Tăng tần số clock không đồng nghĩa tăng tốc xử lý ảnh sau thay đổi này.
 

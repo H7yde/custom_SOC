@@ -2,7 +2,7 @@ param(
     [string] $VivadoBin = "",
     [string] $FirmwareHex = "",
     [string] $OutputDirectory = "",
-    [int] $ClockFrequency = 50000000,
+    [int] $ClockFrequency = 125000000,
     [switch] $PhasedDdrClock
 )
 $ErrorActionPreference = "Stop"
@@ -23,6 +23,9 @@ $VivadoBin = (Resolve-Path -LiteralPath $VivadoBin).Path
 $globalModule = Join-Path (Split-Path $VivadoBin -Parent) "data/verilog/src/glbl.v"
 New-Item -ItemType Directory -Force -Path $simulationDirectory | Out-Null
 Copy-Item -LiteralPath $FirmwareHex -Destination (Join-Path $simulationDirectory "firmware.hex")
+foreach ($weightName in @("conv1_rgb_weight.mem", "conv2_weight.mem", "conv3_weight.mem", "fc_weight.mem")) {
+    Copy-Item -LiteralPath (Join-Path $rtlDirectory $weightName) -Destination $simulationDirectory
+}
 $rtlNames = @("picorv32.v", "parallel.v", "soc_axi_top.v", "axi_uart_slave.v",
               "axi_spi_slave.v", "axi_i2c_slave.v", "CNN.v", "cnn_memory_subsystem.v",
               "cnn_docx_reference.v", "dma32_to_rgb24.v", "picorv32_axi4_bram_adapter.v",
@@ -33,7 +36,7 @@ try {
     & (Join-Path $VivadoBin "xvlog.bat") --sv --work xil_defaultlib @rtlFiles (Join-Path $PSScriptRoot "tb_bram_firmware.v") $globalModule
     if ($LASTEXITCODE -ne 0) { throw "xvlog failed ($LASTEXITCODE)." }
     $elaborationArguments = @("--debug", "typical", "-L", "unisims_ver", "-L", "unimacro_ver")
-    if ($ClockFrequency -ne 50000000) {
+    if ($ClockFrequency -ne 125000000) {
         $clockGeneric = '"CLK_FREQ={0}"' -f $ClockFrequency
         $elaborationArguments += @("--generic_top", $clockGeneric)
     }

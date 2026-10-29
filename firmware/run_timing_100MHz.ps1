@@ -20,7 +20,6 @@ $timingFiles = @("picorv32.v", "parallel.v", "soc_axi_top.v", "axi_uart_slave.v"
 foreach ($timingName in $timingFiles) {
     Copy-Item -LiteralPath (Join-Path $timingRtl $timingName) -Destination $timingSnapshot
 }
-Copy-Item -LiteralPath (Join-Path $timingRepo "SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/constrs_1/new/soc_top_board.xdc") -Destination $timingSnapshot
 Copy-Item -LiteralPath (Join-Path $timingRepo "SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/constrs_1/new/soc_top_100MHz.xdc") -Destination $timingSnapshot
 Copy-Item -LiteralPath (Join-Path $timingSnapshot "firmware.hex") -Destination $timingOutput
 Get-ChildItem -LiteralPath $timingSnapshot -File | Get-FileHash | Select-Object Path,Hash |

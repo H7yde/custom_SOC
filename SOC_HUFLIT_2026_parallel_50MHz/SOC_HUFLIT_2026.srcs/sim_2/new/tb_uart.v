@@ -1,9 +1,9 @@
 `timescale 1ns/1ps
 
 module tb_uart;
-    localparam CLK_FREQ         = 100_000_000;
+    localparam CLK_FREQ         = 50_000_000;              
     localparam BAUD_RATE        = 5000000;                  
-    localparam CLK_PERIOD_NS    = 10;
+    localparam CLK_PERIOD_NS    = 20;                      
     localparam real BIT_PERIOD_NS = 1_000_000_000.0 / BAUD_RATE; 
 
     reg clk   = 1'b0;

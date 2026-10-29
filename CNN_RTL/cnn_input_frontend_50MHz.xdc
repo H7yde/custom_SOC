@@ -1,10 +1,10 @@
 ## Timing constraint for cnn_input_frontend
-## Target clock: 100 MHz
-## Clock period: 10 ns
+## Target clock: 50 MHz
+## Clock period: 20 ns
 
-create_clock -name clk_100MHz \
-    -period 10.000 \
-    -waveform {0.000 5.000} \
+create_clock -name clk_50MHz \
+    -period 20.000 \
+    -waveform {0.000 10.000} \
     [get_ports clk]
 
 ## The following pin constraints are board/device dependent and are

@@ -4,7 +4,7 @@ module tb_soc_apb_top;
 
 // ── Clock / Reset ──────────────────────────────────────────
 reg clk = 0, rst_n = 0;
-always #5 clk = ~clk;  // 100 MHz (Chu kỳ 10ns)
+always #10 clk = ~clk;  // 50 MHz (Chu kỳ 20ns)
 
 // ── DUT I/O ────────────────────────────────────────────────
 reg  [31:0] PADDR = 0; 
@@ -35,7 +35,7 @@ localparam I2C_BASE  = 32'h4000_2000;
 
 // ── Instantiation ──────────────────────────────────────────
 soc_apb_top #(
-    .CLK_FREQ(100_000_000), 
+    .CLK_FREQ(50_000_000), 
     .BAUD_RATE(115200)
 ) u_dut (
     .clk(clk), .rst_n(rst_n),

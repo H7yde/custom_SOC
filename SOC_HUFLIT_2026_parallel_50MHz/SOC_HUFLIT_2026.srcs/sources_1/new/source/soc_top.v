@@ -1,5 +1,5 @@
 module soc_top #(
-    parameter CLK_FREQ  = 100_000_000,
+    parameter CLK_FREQ  = 125_000_000,
     parameter BAUD_RATE = 115200,
     parameter ENABLE_MUL = 0,
     parameter ENABLE_DIV = 0,

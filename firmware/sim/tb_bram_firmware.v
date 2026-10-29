@@ -3,23 +3,23 @@
 // Boot the real PicoRV32 from the SoC's normal firmware.hex BRAM image.
 // Observe the CPU memory interface; this test never supplies CPU read data.
 module tb_bram_firmware;
-    parameter integer CLK_FREQ = 100000000;
+    parameter integer CLK_FREQ = 125000000;
     parameter integer DDR_TX_PHASED_CLOCK = 1;
     localparam real HALF_CLOCK_NS = 500000000.0 / CLK_FREQ;
     reg clk = 0;
     reg resetn = 0;
     wire uart_tx;
-    wire cpu_trap;
+    wire cpu_trap = dut.u_cpu.trap;
+    tri sda;
     always #(HALF_CLOCK_NS) clk = ~clk;
 
     soc_top #(.CLK_FREQ(CLK_FREQ), .DDR_TX_PHASED_CLOCK(DDR_TX_PHASED_CLOCK)) dut (
         .clk(clk), .resetn(resetn),
         .uart_tx(uart_tx), .uart_rx(1'b1),
         .spi_sclk(), .spi_mosi(), .spi_miso(1'b0), .spi_cs(),
-        .scl_out(), .sda_out(), .sda_oe(), .sda_in(1'b1),
-        .ddr_data_in(32'b0), .ddr_rx_valid(1'b0),
-        .ddr_data(), .ddr_clk_out(), .ddr_valid(), .ddr_done(),
-        .cpu_trap(cpu_trap)
+        .scl_out(), .sda(sda),
+        .ddr_data_in(16'b0), .ddr_rx_valid(1'b0),
+        .ddr_data(), .ddr_clk_out(), .ddr_valid(), .ddr_done()
     );
 
     // Stable waveform aliases for the software report at byte address 0x800.

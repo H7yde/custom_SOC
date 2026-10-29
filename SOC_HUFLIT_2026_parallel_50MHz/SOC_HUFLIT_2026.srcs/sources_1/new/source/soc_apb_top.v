@@ -9,7 +9,7 @@
 // ============================================================
 
 module soc_apb_top #(
-    parameter CLK_FREQ  = 100_000_000,
+    parameter CLK_FREQ  = 125_000_000,
     parameter BAUD_RATE = 115200
 )(
     input  wire        clk,

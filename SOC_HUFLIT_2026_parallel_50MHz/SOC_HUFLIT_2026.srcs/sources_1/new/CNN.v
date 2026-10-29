@@ -56,8 +56,7 @@ module CNN (
     input  wire        M_AXI_RVALID,
     output wire        M_AXI_RREADY
 );
-    (* ram_style = "block" *) reg [31:0] frame_mem [0:767];
-    reg [31:0] frame_read_data_reg;
+    reg [31:0] frame_mem [0:767];
 
     reg        aw_pending;
     reg        w_pending;
@@ -102,7 +101,7 @@ module CNN (
 
     wire [31:0] frame_send_data = dma_enable_reg ?
                                   frame_send_data_reg :
-                                  frame_read_data_reg;
+                                  frame_mem[frame_word_index];
     wire        dma_ready;
     wire [23:0] rgb_data;
     wire        rgb_valid;
@@ -110,46 +109,6 @@ module CNN (
     wire        cnn_result_valid;
     wire        cnn_classification;
     wire        rst = ~rst_n;
-
-    wire frame_write_en = rst_n && write_fire && (write_offset < 12'hC00);
-    wire frame_read_start = start_pending && !busy_reg;
-    wire frame_read_en = rst_n && !dma_enable_reg &&
-                         (frame_read_start || (frame_send_valid && dma_ready &&
-                                               frame_word_index < 10'd767));
-    wire [9:0] frame_read_index = frame_read_start ? 10'd0 :
-                                 frame_word_index + 10'd1;
-
-    // Simple dual-port BRAM with byte-enabled writes and synchronous reads.
-    // START fetches word 0; accepting a word fetches its successor on that
-    // same edge. The registered word is held throughout downstream stalls.
-    // A simultaneous read/write of the same word has read-first semantics.
-    // Do not reset the RAM or its data output; frame_send_valid guards it.
-    always @(posedge clk) begin
-        if (frame_write_en) begin
-            if (wstrb_reg[0]) frame_mem[write_offset[11:2]][7:0]   <= wdata_reg[7:0];
-            if (wstrb_reg[1]) frame_mem[write_offset[11:2]][15:8]  <= wdata_reg[15:8];
-            if (wstrb_reg[2]) frame_mem[write_offset[11:2]][23:16] <= wdata_reg[23:16];
-            if (wstrb_reg[3]) frame_mem[write_offset[11:2]][31:24] <= wdata_reg[31:24];
-        end
-        if (frame_read_en)
-            frame_read_data_reg <= frame_mem[frame_read_index];
-    end
-
-    // Keep AXI, DMA control and result registers on the always-running clk.
-    // Only the RGB packer and compute core sleep between frames. Reset must
-    // pass clock edges because both blocks use synchronous resets.
-    wire        cnn_clk;
-    wire        cnn_clk_en = rst | start_pending | busy_reg | cnn_result_valid;
-
-    // Keep clocking through result_valid so the core clears its result pulse
-    // and returns to capture mode before the next frame.
-    BUFGCE #(
-        .SIM_DEVICE("7SERIES")
-    ) u_cnn_clock_gate (
-        .I  (clk),
-        .CE (cnn_clk_en),
-        .O  (cnn_clk)
-    );
 
     assign S_AXI_AWREADY = !aw_pending && !bvalid_reg;
     assign S_AXI_WREADY  = !w_pending  && !bvalid_reg;
@@ -167,7 +126,7 @@ module CNN (
     dma32_to_rgb24 #(
         .MSB_FIRST(1'b1)
     ) u_dma_to_rgb (
-        .clk       (cnn_clk),
+        .clk       (clk),
         .rst       (rst),
         .dma_data  (frame_send_data),
         .dma_valid (frame_send_valid),
@@ -178,7 +137,7 @@ module CNN (
     );
 
     cnn_docx_reference u_cnn_reference (
-        .clk           (cnn_clk),
+        .clk           (clk),
         .rst           (rst),
         .pixel_data    (rgb_data),
         .pixel_valid   (rgb_valid),
@@ -235,9 +194,16 @@ module CNN (
                 w_pending  <= 1'b0;
                 bvalid_reg <= 1'b1;
 
-                // The dedicated BRAM process performs the baseline write.
-                if (frame_write_en)
-                    baseline_write_counter <= baseline_write_counter + 32'd1;
+                // Baseline image buffer.
+                if (write_offset < 12'hC00) begin
+                    if (write_offset[11:2] < 10'd768) begin
+                        if (wstrb_reg[0]) frame_mem[write_offset[11:2]][7:0]   <= wdata_reg[7:0];
+                        if (wstrb_reg[1]) frame_mem[write_offset[11:2]][15:8]  <= wdata_reg[15:8];
+                        if (wstrb_reg[2]) frame_mem[write_offset[11:2]][23:16] <= wdata_reg[23:16];
+                        if (wstrb_reg[3]) frame_mem[write_offset[11:2]][31:24] <= wdata_reg[31:24];
+                        baseline_write_counter <= baseline_write_counter + 32'd1;
+                    end
+                end
 
                 // Runtime configuration registers.
                 if (write_offset == 12'hFE0)
