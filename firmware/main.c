@@ -1,4 +1,4 @@
-/* Bare-metal RV32I firmware for the active soc_top, 50 MHz / UART 115200 8N1.
+/* Bare-metal RV32I firmware for the active soc_top, 125 MHz / UART 115200 8N1.
  * Images stream from UART directly into CNN/MMIO memory, not the 4 KiB BRAM.
  * No libc, interrupts, multiply/divide instructions, or heap are required.
  */
@@ -35,6 +35,24 @@ static void uart_hex(uint32_t value)
         unsigned digit = (value >> shift) & 15u;
         uart_putc((unsigned char)(digit < 10u ? '0' + digit : 'A' + digit - 10u));
     }
+}
+
+/* Claim across the whole upload/configure/run/read-result sequence. */
+static int cnn_claim(void)
+{
+    uint32_t timeout = 200000u;
+    do {
+        CNN_BRIDGE_OWNER = 1;
+        if ((CNN_BRIDGE_OWNER & 3u) == 1u) return 1;
+    } while (--timeout);
+    uart_puts("ERROR CNN OWNED BY ARM\r\n");
+    return 0;
+}
+
+static void cnn_release(void)
+{
+    /* Hardware ignores release while inference is still busy. */
+    CNN_BRIDGE_OWNER = 0;
 }
 
 static int boot_test(void)
@@ -78,6 +96,8 @@ static int cnn_run(void)
     uart_puts(" CYCLES "); uart_hex(fw_report.cycles);
     uart_puts(" READS "); uart_hex(fw_report.dma_reads);
     uart_puts("\r\n");
+    uart_puts(fw_report.classification ? "CLASS CO_NGUOI\r\n" :
+                                       "CLASS KHONG_CO_NGUOI\r\n");
     return 1;
 }
 
@@ -157,8 +177,9 @@ int main(void)
     int command, ok;
     fw_report.magic = 0x534f4346u; /* "SOCF" */
     fw_report.stage = 1;
-    uart_puts("SOC BRAM READY\r\n");
-    ok = boot_test();
+    uart_puts("SOC CNN READY\r\n");
+    ok = cnn_claim();
+    if (ok) { ok = boot_test(); cnn_release(); }
     if (ok) { ++fw_report.passes; uart_puts("BOOT PASS\r\n"); }
     else { ++fw_report.failures; uart_puts("BOOT FAIL\r\n"); }
     for (;;) {
@@ -170,6 +191,12 @@ int main(void)
             uart_puts("B: baseline; 0/1: DMA upload (3072 RGB bytes); P: pingpong; z: smoke\r\n");
             continue;
         }
+        if (command != 'B' && command != '0' && command != '1' &&
+            command != 'P' && command != 'z') {
+            uart_puts("ERROR COMMAND\r\n");
+            continue;
+        }
+        if (!cnn_claim()) continue;
         if (command == 'B' || command == '0' || command == '1')
             ok = upload_frame(command);
         else if (command == 'P') {
@@ -179,6 +206,7 @@ int main(void)
             ok = smoke_test();
             uart_puts(ok ? "SMOKE PASS\r\n" : "SMOKE FAIL\r\n");
         } else { uart_puts("ERROR COMMAND\r\n"); continue; }
+        cnn_release();
         if (ok) ++fw_report.passes;
         else ++fw_report.failures;
     }

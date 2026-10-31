@@ -16,7 +16,7 @@ module tb_firmware;
     tri sda;
     always #4 clk = ~clk;
 
-    soc_top #(.CLK_FREQ(CLK_FREQ), .BAUD_RATE(BAUD_RATE)) dut (
+    soc_top #(.CLK_FREQ(CLK_FREQ), .BAUD_RATE(BAUD_RATE), .ENABLE_USB_HDMI(0)) dut (
         .clk(clk), .resetn(resetn),
         .uart_tx(uart_tx), .uart_rx(uart_rx),
         .spi_sclk(), .spi_mosi(), .spi_miso(1'b0), .spi_cs(),
@@ -135,6 +135,8 @@ module tb_firmware;
                 send_byte(pixel_value[23:16]);
                 send_byte(pixel_value[15:8]);
                 send_byte(pixel_value[7:0]);
+                if ((pixel_number + 1) % 256 == 0)
+                    $display("UPLOAD %c: %0d/1024 pixels", command, pixel_number + 1);
             end
         end
     endtask
@@ -172,19 +174,27 @@ module tb_firmware;
 
     initial begin : test_sequence
         integer first_result;
+        integer initial_done_count;
+        integer initial_dma_read_count;
         repeat (20) @(negedge clk);
         resetn = 1;
         wait(ready_count == 1);
-        send_byte("z");
-        wait(smoke_count == 1);
-        if (cnn_done_count != 3 || dma_read_count != 1536)
-            $fatal(1, "Smoke did not execute baseline + DMA0 + DMA1 (%0d runs, %0d reads)",
-                   cnn_done_count, dma_read_count);
+        if ($test$plusargs("SKIP_SMOKE") && !$test$plusargs("FULL_IMAGES"))
+            $fatal(1, "SKIP_SMOKE requires FULL_IMAGES");
+        if (!$test$plusargs("SKIP_SMOKE")) begin
+            send_byte("z");
+            wait(smoke_count == 1);
+            if (cnn_done_count != 3 || dma_read_count != 1536)
+                $fatal(1, "Smoke did not execute baseline + DMA0 + DMA1 (%0d runs, %0d reads)",
+                       cnn_done_count, dma_read_count);
+        end
 
         if ($test$plusargs("FULL_IMAGES")) begin
             $readmemh("human_frames.mem", human_pixels);
             $readmemh("nonhuman_frame.mem", nonhuman_pixels);
             first_result = result_count;
+            initial_done_count = cnn_done_count;
+            initial_dma_read_count = dma_read_count;
             expected_image = 1;
             upload_frame("B", 1);
             check_result(first_result, 1, 0, 0, 0);
@@ -198,7 +208,8 @@ module tb_firmware;
             send_byte("P");
             check_result(first_result + 3, 1, 1, 0, 1);
             check_result(first_result + 4, 0, 1, 1, 1);
-            if (cnn_done_count != 8 || dma_read_count != 4608)
+            if (cnn_done_count != initial_done_count + 5 ||
+                dma_read_count != initial_dma_read_count + 3072)
                 $fatal(1, "Full run counts wrong (%0d runs, %0d reads)", cnn_done_count, dma_read_count);
         end
         $display("\nFIRMWARE INTEGRATION PASS");

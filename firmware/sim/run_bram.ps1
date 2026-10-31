@@ -9,7 +9,9 @@ $ErrorActionPreference = "Stop"
 if ($ClockFrequency -le 0) { throw "ClockFrequency must be positive." }
 $firmwareDirectory = Split-Path $PSScriptRoot -Parent
 $repositoryDirectory = Split-Path $firmwareDirectory -Parent
-$rtlDirectory = Join-Path $repositoryDirectory "SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/sources_1/new"
+$socProjects = @(Get-ChildItem -Path (Join-Path $repositoryDirectory 'SOC_HUFLIT_2026_parallel_*/SOC_HUFLIT_2026.xpr'))
+if ($socProjects.Count -ne 1) { throw "Expected one active SoC project." }
+$rtlDirectory = Join-Path $socProjects[0].Directory.FullName "SOC_HUFLIT_2026.srcs/sources_1/new"
 $simulationDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $firmwareDirectory "build/sim_bram" }
 if (-not $FirmwareHex) { $FirmwareHex = Join-Path $firmwareDirectory "bram_test.hex" }
 $FirmwareHex = (Resolve-Path -LiteralPath $FirmwareHex).Path
@@ -29,7 +31,7 @@ foreach ($weightName in @("conv1_rgb_weight.mem", "conv2_weight.mem", "conv3_wei
 $rtlNames = @("picorv32.v", "parallel.v", "soc_axi_top.v", "axi_uart_slave.v",
               "axi_spi_slave.v", "axi_i2c_slave.v", "CNN.v", "cnn_memory_subsystem.v",
               "cnn_docx_reference.v", "dma32_to_rgb24.v", "picorv32_axi4_bram_adapter.v",
-              "axi4_bram_slave.v", "soc_top.v")
+              "axi4_bram_slave.v", "cnn_axi_bridge.v", "soc_top.v")
 $rtlFiles = @($rtlNames | ForEach-Object { Join-Path $rtlDirectory $_ })
 Push-Location $simulationDirectory
 try {

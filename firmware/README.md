@@ -1,4 +1,15 @@
-# Firmware BRAM cho HUFLIT SoC
+# Firmware CNN cho PicoRV32 trong HUFLIT SoC
+
+Firmware đang chọn đã chuyển từ BRAM-only sang **CNN UART** (`main.c`).
+Build lại bằng `python firmware/build.py --app cnn`. Trong Vivado đang mở, chạy
+`source D:/LAB/custom_SOC-main/firmware/select_cnn_firmware.tcl`, rồi build lại
+bitstream. UART ở RPi header: TX Y9, RX A20, 115200 baud, mức logic 3,3 V và chung GND.
+Đây không phải UART PS qua cổng micro-USB của board.
+Sau khi nạp bitstream, gửi ảnh bằng
+`python firmware/host.py --port COM5 --mode baseline --expect 1` (đổi COM thực tế).
+Firmware in `RESULT 1 ...` và `CLASS CO_NGUOI`, hoặc `RESULT 0 ...` và
+`CLASS KHONG_CO_NGUOI`. Hiện nhận ảnh qua UART; đường USB camera/HDMI còn cần
+thiết kế PS/video và chương trình ARM như hướng dẫn trong `fpga_usb_hdmi/README.md`.
 
 Nếu chỉ cần kiểm tra đọc/ghi BRAM, dùng bản tối giản trong
 [BRAM_ONLY.md](BRAM_ONLY.md): `py firmware/build.py --app bram --no-deploy`.
@@ -9,7 +20,7 @@ Firmware bare-metal C + assembly dành cho `soc_top` đang có trong project:
 
 - CPU PicoRV32, ISA **RV32I**, ABI **ILP32**, không cần bộ nhân/chia hoặc lệnh nén.
 - BRAM 4 KiB tại `0x00000000..0x00000fff`; reset PC = `0`; stack bắt đầu tại `0x00000ff0`.
-- Clock mặc định 50 MHz, UART **115200 baud, 8N1**.
+- Clock SoC hiện tại 125 MHz, UART **115200 baud, 8N1**.
 - Firmware boot, tự kiểm tra dữ liệu/BRAM và thanh ghi CNN, rồi chờ lệnh UART.
 - Nhận ảnh RGB888 32×32 từ PC và chạy CNN qua AXI-Lite, DMA buffer 0/1 hoặc ping-pong.
 
@@ -44,7 +55,7 @@ Script tìm RISC-V GCC trong `PATH`, `RISCV_GCC`, hoặc bộ công cụ AMD/Xil
 Máy hiện tại có compiler ở:
 
 ```text
-C:/AMDDesignTools/2025.2/gnu/riscv/nt/bin/riscv64-unknown-elf-gcc.exe
+D:/Vivado_data/2025.2/gnu/riscv/nt/bin/riscv64-unknown-elf-gcc.exe
 ```
 
 Có thể chọn compiler khác:
@@ -72,7 +83,7 @@ Project `.xpr` đã được bổ sung `firmware.hex` vào Design Sources với 
 **Tcl Console** để cập nhật phiên đang mở:
 
 ```tcl
-source D:/SoC/custom_SOC-main/custom_SOC-main/firmware/add_to_vivado.tcl
+source D:/LAB/custom_SOC-main/firmware/select_cnn_firmware.tcl
 ```
 
 Sau khi thay firmware, chạy lại synthesis/implementation/generate bitstream để
@@ -94,8 +105,9 @@ simulator ngoài project, đặt `firmware.hex` vào working directory của sim
 ## Gửi ảnh từ PC
 
 Nạp bitstream mới lên FPGA, kết nối UART TX/RX và GND đúng với board, đóng các
-terminal khác đang giữ cổng COM. Chọn clock/baud trùng với cấu hình SoC. Project
-hiện chưa có đầy đủ gán chân `PACKAGE_PIN` cho board, cần dùng XDC đúng phần cứng.
+terminal khác đang giữ cổng COM. Chọn clock/baud trùng với cấu hình SoC.
+XDC hiện gán UART TX=Y9, RX=A20 tại RPi header; dùng USB–UART mức 3,3 V,
+nối chéo TX/RX và chung GND. Cổng micro-USB của PS không nối tới UART PicoRV32 này.
 
 Cài thư viện cho công cụ host (chỉ cần khi dùng UART với board):
 
@@ -128,7 +140,7 @@ Smoke dùng ảnh đen để kiểm tra các đường truyền cho cùng kết 
 Đầu ra boot:
 
 ```text
-SOC BRAM READY
+SOC CNN READY
 BOOT PASS
 READY
 ```

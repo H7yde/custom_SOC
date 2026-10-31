@@ -1,2 +1,7 @@
 __pycache__/
 *.py[cod]
+
+# Downloaded COCO images/annotations, preprocessed RGB caches and training runs.
+data/coco2017/
+runs/
+legacy_models/

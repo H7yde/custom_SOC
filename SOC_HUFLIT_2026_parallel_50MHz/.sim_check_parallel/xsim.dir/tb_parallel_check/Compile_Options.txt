@@ -1,1 +1,0 @@
---debug "typical" --snapshot "tb_parallel_check" "work.tb_parallel" 

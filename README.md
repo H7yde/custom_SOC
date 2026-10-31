@@ -1,5 +1,20 @@
 # HUFLIT 125 MHz SoC with CNN
 
+The active Vivado project is
+`SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr`.
+The combined `soc_top` includes PicoRV32/CNN and the Zynq PS USB/HDMI block
+design, with an ARM-to-CNN AXI4-Lite bridge at `0x40004000`.
+See [ARM/CNN integration](fpga_usb_hdmi/ARM_CNN_BRIDGE.md),
+[ARM driver](firmware_arm/README.md), and
+[COCO 2017 training](CNN_RTL/COCO2017.md) for the current workflow.
+CNN input remains RGB 32x32. Dataset downloads, Vivado build outputs and
+local backup snapshots are excluded from version control.
+
+After cloning, install the Digilent `vivado-library` IP repository, adjust the
+Vivado project's IP repository path to its local location, and regenerate the
+block design output products. PS initialization and ARM application software
+are required to use USB/HDMI; programming the bitstream alone does not start video.
+
 This repository contains the HUFLIT SoC FPGA project running directly from the PYNQ-Z2 H16 125 MHz clock. It integrates a PicoRV32 CPU, AXI/APB peripherals, a parallel/DDR interface, and a CNN accelerator for binary human/non-human classification.
 
 The CPU, BRAM, AXI, CNN, and DDR data logic share the 125 MHz core clock
@@ -199,16 +214,20 @@ The XDC contains the 50 MHz clock constraint:
 
     create_clock -period 20.000 -name sys_clk [get_ports clk]
 
-## Python and export files
+## COCO 2017 training and export
 
-The CNN training/export files are maintained in the CNN_RTL repository:
+The active dataset is COCO 2017. The model classifies the entire RGB32 frame:
+1 means at least one annotated person (including crowd annotations), and 0
+means no person annotation. Training uses train2017; validation uses val2017,
+with disjoint source image IDs. It is a binary classifier, not a box detector.
 
-    CNN_layer.py
-    CNN_MEM.py
-    export_cifar_frames.py
-    tb_CNN.v
+See [CNN_RTL/COCO2017.md](CNN_RTL/COCO2017.md) for downloading the official
+archives, training from scratch, Q4.4 quantization-aware training, real RTL
+verification, and installing the exported weights in the Vivado source tree.
 
-They are used to train the model, quantize weights, export .mem files, and generate frame test data.
+`CNN_RTL/CNN_layer.py` is the training entry point. Data and output paths are
+relative to the scripts rather than the current working directory. Exported
+weights preserve the RTL architecture and FC ROM order.
 
 ## Notes
 

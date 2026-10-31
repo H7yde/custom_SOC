@@ -13,7 +13,7 @@ module tb_bram_firmware;
     tri sda;
     always #(HALF_CLOCK_NS) clk = ~clk;
 
-    soc_top #(.CLK_FREQ(CLK_FREQ), .DDR_TX_PHASED_CLOCK(DDR_TX_PHASED_CLOCK)) dut (
+    soc_top #(.CLK_FREQ(CLK_FREQ), .DDR_TX_PHASED_CLOCK(DDR_TX_PHASED_CLOCK), .ENABLE_USB_HDMI(0)) dut (
         .clk(clk), .resetn(resetn),
         .uart_tx(uart_tx), .uart_rx(1'b1),
         .spi_sclk(), .spi_mosi(), .spi_miso(1'b0), .spi_cs(),

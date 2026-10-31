@@ -10,7 +10,8 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-PROJECT = ROOT / "SOC_HUFLIT_2026_parallel_50MHz"
+PROJECTS = sorted(ROOT.glob("SOC_HUFLIT_2026_parallel_*/SOC_HUFLIT_2026.xpr"))
+PROJECT = PROJECTS[0].parent if len(PROJECTS) == 1 else None
 BRAM_BYTES = 4096
 
 
@@ -31,7 +32,7 @@ def find_gcc(explicit=None):
         if os.environ.get(name):
             installations.append(Path(os.environ[name]).parent)
     for base in (Path("C:/AMDDesignTools"), Path("D:/AMDDesignTools"),
-                 Path("C:/Xilinx"), Path("D:/Xilinx")):
+                 Path("C:/Xilinx"), Path("D:/Xilinx"), Path("D:/Vivado_data")):
         if base.is_dir():
             installations.extend(sorted(base.iterdir(), reverse=True))
     for installation in installations:
@@ -104,6 +105,8 @@ def build(args):
         with (output / f"{app_name}.dis").open("w", encoding="utf-8") as stream:
             subprocess.run([str(objdump), "-d", str(elf)], check=True, stdout=stream)
     if not args.no_deploy:
+        if PROJECT is None:
+            raise ValueError("Expected one active SoC project; use --no-deploy to build only")
         destination = PROJECT / "SOC_HUFLIT_2026.srcs/sources_1/new/firmware.hex"
         shutil.copyfile(hex_path, destination)
         print(f"Vivado image: {destination}")

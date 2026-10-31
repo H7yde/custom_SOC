@@ -40,3 +40,26 @@ timing_report.txt
 !/firmware/backups/before_pipeline_20261018_102557/
 /firmware/backups/before_pipeline_20261018_102557/*
 !/firmware/backups/before_pipeline_20261018_102557/cnn_docx_reference.v
+
+# Local USB/HDMI repair snapshots and generated verification projects
+/fpga_usb_hdmi/backups/
+/fpga_usb_hdmi/build_check/*
+!/fpga_usb_hdmi/build_check/*.tcl
+!/fpga_usb_hdmi/build_check/*.py
+**/ip_retry_logs/
+
+# Local datasets, training experiments, environments and editor settings
+/CNN_RTL/data/
+/CNN_RTL/coco_32px_epoch1/
+.venv/
+venv/
+.conda/
+.vscode/
+.env
+.env.*
+!.env.example
+!.env.template
+*.tmp
+*.swp
+Thumbs.db
+.DS_Store

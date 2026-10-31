@@ -1,0 +1,194 @@
+{
+  "configuration": {
+    "data_root": "D:\\LAB\\custom_SOC-main\\CNN_RTL\\data\\coco2017",
+    "output_dir": "D:\\LAB\\custom_SOC-main\\CNN_RTL\\runs\\coco2017_frame_20261030_134143",
+    "mode": "frame",
+    "epochs": 60,
+    "qat_epochs": 30,
+    "batch_size": 512,
+    "learning_rate": 0.0005,
+    "qat_learning_rate": 5e-05,
+    "workers": 8,
+    "seed": 42,
+    "patience": 15,
+    "device": "cuda",
+    "resume": "D:\\LAB\\custom_SOC-main\\CNN_RTL\\runs\\coco2017_frame_20261030_132644\\cnn_coco2017_best_float.pth",
+    "no_augment": false,
+    "dataset": "COCO 2017",
+    "task": "whole-frame person presence",
+    "from_scratch": false,
+    "architecture": "RGB32 Conv3-4 Conv4-4 Conv4-4 FC16-1, no biases",
+    "torch": "2.5.1+cu121",
+    "cuda": "12.1",
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "source": "https://cocodataset.org/#download",
+    "training_code_sha256": {
+      "train_coco2017.py": "482afcee16ce562ec7c33b7bdd9da77b0cdd810384d3be7e0cbcd3fbc1414d5f",
+      "cnn_model.py": "be978be5ff686841c4a670b822b229369efa5cb863b94c2bb135dcc64951d08c",
+      "coco_dataset.py": "84ed0c7ec9cd342600333dae34f59a74a04a1504b25ba0de427f96ccfb660cae"
+    },
+    "resume_sha256": "7af6c817089a23ce965821e42e6b42d6c93f6927773dedc14b4d09c391515be2",
+    "optimizer_restarted": true
+  },
+  "train": {
+    "version": 1,
+    "split": "train2017",
+    "mode": "frame",
+    "annotation_sha256": "610fce4944abdeb15354cc765333805529359d12d88f2f711393ca586901d01d",
+    "seed": 42,
+    "resize": "Pillow bilinear RGB 32x32",
+    "image_size": 32,
+    "examples": 118287,
+    "person": 64115,
+    "background": 54172,
+    "official_source_images": 118287,
+    "cache_sha256": "d1a16d498f2539c07b3abb0364405513e4c59a7ee894320d93c63bbaf3fca0c5"
+  },
+  "validation": {
+    "version": 1,
+    "split": "val2017",
+    "mode": "frame",
+    "annotation_sha256": "e8c7f7908f1d7278341fae127d0da654f102f11bd7b21d8aeefa635b8c810b6f",
+    "seed": 42,
+    "resize": "Pillow bilinear RGB 32x32",
+    "image_size": 32,
+    "examples": 5000,
+    "person": 2693,
+    "background": 2307,
+    "official_source_images": 5000,
+    "cache_sha256": "1606501eb7af706393a09da9f0a1e044963a695f1e388f20e1761c797cd03bb7"
+  },
+  "float": {
+    "loss": 0.6249961256980896,
+    "accuracy": 0.6612,
+    "balanced_accuracy": 0.6657234452177465,
+    "precision": 0.7199471598414795,
+    "recall": 0.6071295952469365,
+    "specificity": 0.7243172951885566,
+    "tn": 1671,
+    "fp": 636,
+    "fn": 1058,
+    "tp": 1635,
+    "zero_score_count": 0
+  },
+  "before_qat": {
+    "loss": 0.7392832636833191,
+    "accuracy": 0.6078,
+    "balanced_accuracy": 0.5832214263858313,
+    "precision": 0.588748787584869,
+    "recall": 0.9015967322688452,
+    "specificity": 0.26484612050281753,
+    "tn": 611,
+    "fp": 1696,
+    "fn": 265,
+    "tp": 2428,
+    "zero_score_count": 12
+  },
+  "qat": {
+    "loss": 0.6236087679862976,
+    "accuracy": 0.6562,
+    "balanced_accuracy": 0.6574471598813472,
+    "precision": 0.6963709677419355,
+    "recall": 0.6412922391385072,
+    "specificity": 0.6736020806241872,
+    "tn": 1554,
+    "fp": 753,
+    "fn": 966,
+    "tp": 1727,
+    "zero_score_count": 20
+  },
+  "rtl_q44": {
+    "loss": 0.6236087679862976,
+    "accuracy": 0.6562,
+    "balanced_accuracy": 0.6574471598813472,
+    "precision": 0.6963709677419355,
+    "recall": 0.6412922391385072,
+    "specificity": 0.6736020806241872,
+    "tn": 1554,
+    "fp": 753,
+    "fn": 966,
+    "tp": 1727,
+    "zero_score_count": 20
+  },
+  "integer_oracle_checks": 64,
+  "examples": [
+    {
+      "file": "human_frame.mem",
+      "image_id": 785,
+      "ground_truth": 1,
+      "rtl_expected": 1,
+      "integer_score": 178,
+      "selection": "first correctly classified example by official validation image ID"
+    },
+    {
+      "file": "nonhuman_frame.mem",
+      "image_id": 285,
+      "ground_truth": 0,
+      "rtl_expected": 0,
+      "integer_score": -262,
+      "selection": "first correctly classified example by official validation image ID"
+    },
+    {
+      "file": "black_frame.mem",
+      "ground_truth": null,
+      "rtl_expected": 1,
+      "integer_score": 0,
+      "selection": "synthetic arithmetic check"
+    },
+    {
+      "file": "white_frame.mem",
+      "ground_truth": null,
+      "rtl_expected": 1,
+      "integer_score": 0,
+      "selection": "synthetic arithmetic check"
+    },
+    {
+      "file": "random_frame.mem",
+      "ground_truth": null,
+      "rtl_expected": 1,
+      "integer_score": 927,
+      "selection": "synthetic arithmetic check"
+    }
+  ],
+  "weights": {
+    "conv1_rgb_weight.mem": {
+      "sha256": "f9667a7100fa372a83f36785c525e16c609a1126140615cdc0668a1e576a57b8",
+      "count": 108
+    },
+    "conv2_weight.mem": {
+      "sha256": "82e71947e8cc128ddc72071dacc993528ce142eaa5b1dd056e8c9cf52cb3e6a1",
+      "count": 144
+    },
+    "conv3_weight.mem": {
+      "sha256": "97e6eb3a4b2d48a87eb959281ca1be0e9e60b1e3f795152dad651ae614c80fa5",
+      "count": 144
+    },
+    "fc_weight.mem": {
+      "sha256": "a0cb174e021adc939e05918c0ed94e8057c4924b81c813450a24291c482312ad",
+      "count": 16
+    }
+  },
+  "limitation": "Binary classification, not detection. Validation selects checkpoints; no independent camera test set measured.",
+  "rtl_verification": {
+    "passed": true,
+    "cases": 5,
+    "activation_checks": 27000,
+    "rtl": "D:\\LAB\\custom_SOC-main\\SOC_HUFLIT_2026_parallel_50MHz\\SOC_HUFLIT_2026.srcs\\sources_1\\new\\cnn_docx_reference.v",
+    "rtl_sha256": "6fbf7ae2bf7b12da46a5896074e96a31ea3d5baf2f901dc8e005a51337ac877c",
+    "weights": {
+      "conv1_rgb_weight.mem": "f9667a7100fa372a83f36785c525e16c609a1126140615cdc0668a1e576a57b8",
+      "conv2_weight.mem": "82e71947e8cc128ddc72071dacc993528ce142eaa5b1dd056e8c9cf52cb3e6a1",
+      "conv3_weight.mem": "97e6eb3a4b2d48a87eb959281ca1be0e9e60b1e3f795152dad651ae614c80fa5",
+      "fc_weight.mem": "a0cb174e021adc939e05918c0ed94e8057c4924b81c813450a24291c482312ad"
+    },
+    "examples_sha256": "0f1a3f964238229da302de01d68f8efd393a95efab596ec93e20cea3ca2a9216",
+    "log": "D:\\LAB\\custom_SOC-main\\CNN_RTL\\runs\\coco2017_frame_20261030_134143\\rtl_sim\\simulate.log"
+  },
+  "deployment": {
+    "training_run": "D:\\LAB\\custom_SOC-main\\CNN_RTL\\runs\\coco2017_frame_20261030_134143",
+    "backup": "D:\\LAB\\custom_SOC-main\\CNN_RTL\\legacy_models\\before_deploy_20261030_134702",
+    "retired_legacy_checkpoints": [],
+    "bitstream_rebuilt": false,
+    "firmware_changed": false
+  }
+}

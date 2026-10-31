@@ -1,5 +1,10 @@
 # Firmware chỉ kiểm tra BRAM
 
+Đây là chế độ chẩn đoán tùy chọn. Firmware chính hiện dùng `main.c` để điều khiển
+CNN. Script `select_bram_test.tcl` sẽ thay ảnh firmware bằng bài kiểm tra BRAM;
+để trở về CNN, build `python firmware/build.py --app cnn` rồi chạy
+`source D:/LAB/custom_SOC-main/firmware/select_cnn_firmware.tcl` trong Vivado.
+
 Đường CPU–BRAM hiện đi qua AXI4: xem [AXI4_BRAM.md](AXI4_BRAM.md) để đối chiếu
 từng nhóm tín hiệu, giới hạn hỗ trợ và cách kiểm tra burst. Code C vẫn thực hiện
 các phép đọc/ghi bộ nhớ; giao thức AXI4 do RTL xử lý.

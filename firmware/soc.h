@@ -11,6 +11,8 @@
 #define UART_RX_READY   (1u << 1)
 
 #define CNN_FRAME       0x40004000u
+#define CNN_BRIDGE_OWNER MMIO32(0x40004f00u)
+#define CNN_BRIDGE_ID    MMIO32(0x40004f04u)
 #define CNN_DMA_BASE    MMIO32(0x40004fe0u)
 #define CNN_CONFIG      MMIO32(0x40004fe4u)
 #define CNN_CYCLES      MMIO32(0x40004fe8u)
