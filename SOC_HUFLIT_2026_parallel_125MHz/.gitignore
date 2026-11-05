@@ -23,3 +23,6 @@ __pycache__/
 # Local Git/Vivado temporary files
 *.backup
 *.swp
+
+# Share the imported utility checkpoints and their accompanying files.
+!/SOC_HUFLIT_2026.srcs/utils_1/**
