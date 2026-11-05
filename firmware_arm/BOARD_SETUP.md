@@ -63,12 +63,16 @@ Nếu đã có repo, dùng thư mục hiện tại. Các lệnh Windows dưới 
 
 ### Bước 2 — Chuẩn bị IP và mở đúng project
 
-1. Lấy [Digilent vivado-library](https://github.com/Digilent/vivado-library)
-   về máy, giữ nguyên cấu trúc các IP con.
+1. Repo đã kèm [Digilent vivado-library](../third_party/vivado-library) trong
+   `third_party/vivado-library`, giữ nguyên cấu trúc IP và giấy phép gốc.
+   Không cần tải thư viện riêng từ bên ngoài.
 2. Mở Vivado → **Open Project** →
    `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr`.
-3. Vào **Settings → IP → Repository**, thay đường dẫn IP repository cũ bằng
-   thư mục `vivado-library` trên máy bạn rồi cập nhật IP catalog.
+3. Project đã dùng đường dẫn tương đối `../third_party/vivado-library` tính từ
+   thư mục chứa `.xpr`. Vào **Settings → IP → Repository** để kiểm tra và
+   cập nhật IP catalog. Nếu workspace cũ còn đường dẫn
+   `D:/Vivado_IDE/lib/vivado-library-master`, thay bằng thư mục
+   `third_party/vivado-library` trong bản clone hiện tại.
 4. Mở **Report IP Status**, xử lý IP bị thiếu hoặc bị khóa. Nếu có yêu cầu
    nâng phiên bản IP, lưu bản dự phòng project trước khi nâng và kiểm tra lại BD.
 5. Trong Sources, mở block design `usb_hdmi_system`, **Validate Design**,

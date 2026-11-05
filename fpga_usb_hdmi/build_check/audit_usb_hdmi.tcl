@@ -2,7 +2,8 @@
 set audit_dir [file dirname [file normalize [info script]]]
 set audit_bd [file join $audit_dir usb_hdmi_audit usb_hdmi_system.bd]
 create_project usb_hdmi_audit_project [file join $audit_dir usb_hdmi_audit_project] -part xc7z020clg400-1
-set_property ip_repo_paths {D:/Vivado_IDE/lib/vivado-library-master} [current_project]
+set audit_repo [file normalize [file join $audit_dir ../..]]
+set_property ip_repo_paths [list [file join $audit_repo third_party vivado-library]] [current_project]
 update_ip_catalog
 add_files -norecurse $audit_bd
 open_bd_design $audit_bd

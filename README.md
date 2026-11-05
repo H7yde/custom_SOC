@@ -10,9 +10,11 @@ See [ARM/CNN integration](fpga_usb_hdmi/ARM_CNN_BRIDGE.md),
 CNN input remains RGB 32x32. Dataset downloads, Vivado build outputs and
 local backup snapshots are excluded from version control.
 
-After cloning, install the Digilent `vivado-library` IP repository, adjust the
-Vivado project's IP repository path to its local location, and regenerate the
-block design output products. PS initialization and ARM application software
+The Digilent `vivado-library` IP repository is included under
+[`third_party/vivado-library`](third_party/vivado-library), with its original
+licenses. The Vivado project uses a relative path to this copy. After cloning,
+refresh the IP catalog and regenerate the block design output products.
+PS initialization and ARM application software
 are required to use USB/HDMI; programming the bitstream alone does not start video.
 
 ## Nạp và chạy trên board Zynq PYNQ-Z2
@@ -31,8 +33,8 @@ project hiện tại; board Zynq khác cần cấu hình PS, chân và image ri�
 Trình tự cho lần đầu:
 
 1. Chuẩn bị cáp USB **PROG/UART**, nguồn, HDMI OUT và driver JTAG.
-2. Mở `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr`, cài IP
-   Digilent, kiểm tra clock 125 MHz và build bitstream.
+2. Mở `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr`, cập nhật IP
+   catalog từ `third_party/vivado-library`, kiểm tra clock 125 MHz và build bitstream.
 3. Export hardware **Include bitstream** thành `soc_top.xsa`.
 4. Kiểm tra HDMI qua Vitis với `arm_test`, hoặc boot SD PYNQ để chạy webcam.
 5. Với webcam, tạo gói trên Windows:
@@ -79,6 +81,7 @@ and external I/O limits.
 - `arm_test`: standalone ARM HDMI color-bar application
 - `soc_platform`: Vitis platform sources; generated outputs must be rebuilt
 - `CNN_RTL`: training, quantization, weights and RTL validation tools
+- `third_party/vivado-library`: bundled Digilent IP cores and interface definitions
 
 ## CNN architecture
 
