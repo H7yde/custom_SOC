@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """USB UVC camera -> custom SoC VDMA -> HDMI on PYNQ-Z2 Linux.
 
-Uses the custom overlay, not base.bit/base.video.hdmi_out. No CNN inference yet.
+Uses the custom overlay, not base.bit/base.video.hdmi_out. --cnn enables PL CNN.
 Run with the board's PYNQ Python environment and access to /dev/mem/CMA.
 """
 import argparse
@@ -112,14 +112,25 @@ def main():
     parser.add_argument("--fps", type=int, default=15)
     parser.add_argument("--frames", type=int, default=0, help="Stop after N frames; 0 runs until Ctrl+C")
     parser.add_argument("--bars", action="store_true", help="Test custom overlay HDMI without camera")
+    parser.add_argument("--cnn", action="store_true", help="Run existing FPGA CNN and draw person/no-person result")
+    parser.add_argument("--cnn-every", type=int, default=5, help="Infer once per N displayed camera frames")
+    parser.add_argument("--cnn-recover", action="store_true", help="Abort/acknowledge own old CNN job before use")
     args = parser.parse_args()
     if args.fps <= 0 or args.frames < 0:
         parser.error("--fps must be positive and --frames nonnegative")
+    if args.cnn_every <= 0 or (args.cnn and args.bars) or (args.cnn_recover and not args.cnn):
+        parser.error("--cnn-every must be positive; --cnn needs camera; --cnn-recover requires --cnn")
     if not args.bit.is_file() or not args.bit.with_suffix(".hwh").is_file():
         parser.error("Matching .bit and .hwh with identical basenames are required")
     import cv2
     import numpy as np
-    from pynq import Overlay, MMIO, allocate, Clocks
+    from pynq import Overlay, MMIO, allocate, Clocks, Device
+    if not Device.devices:
+        raise RuntimeError(
+            "PYNQ found no FPGA devices. In a root bash shell, source "
+            "/etc/profile.d/pynq_venv.sh and /etc/profile.d/xrt_setup.sh, "
+            "then run again in a NEW Python process. This is not a camera error."
+        )
 
     capture = None
     buffers = []
@@ -145,6 +156,14 @@ def main():
             raise RuntimeError("HWH is not this SoC: expected VDMA 0x43000000 and VTC 0x43c00000")
         overlay.download()
         Clocks.fclk0_mhz = 100.0
+        cnn = None
+        last_label = last_cycles = None
+        if args.cnn:
+            from cnn_fpga import CnnFpga, CNN_BASE
+            cnn = CnnFpga(MMIO(CNN_BASE, 0x1000))
+            if args.cnn_recover:
+                cnn.recover()
+            print("FPGA CNN enabled: full-frame RGB32 person presence, no bounding boxes.", flush=True)
         dma, vtc = MMIO(VDMA_BASE, 0x10000), MMIO(VTC_BASE, 0x10000)
         display = Display(dma, vtc, buffers)
         # Stop a previous display before allocating/reusing CMA memory.
@@ -167,9 +186,20 @@ def main():
                 ok, bgr = capture.read()
                 if not ok or bgr is None:
                     raise RuntimeError("Camera frame read failed/disconnected")
+                # Infer on the untouched full camera frame, before adding text.
+                if cnn is not None and count % args.cnn_every == 0:
+                    last_label, last_cycles = cnn.classify(bgr)
+                    print(f"CNN class={last_label} "
+                          f"{'CO_NGUOI' if last_label else 'KHONG_CO_NGUOI'} "
+                          f"cycles={last_cycles} core_ms={last_cycles/125000:.3f}", flush=True)
                 bgr = cv2.resize(bgr, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
                 cv2.putText(bgr, "USB CAMERA -> FPGA HDMI", (16, 28),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 1)
+                if last_label is not None:
+                    text = "LAST CNN: " + ("CO NGUOI" if last_label else "KHONG CO NGUOI")
+                    cv2.rectangle(bgr, (8, 38), (550, 78), (0,0,0), -1)
+                    cv2.putText(bgr, text, (16, 65), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.8, (0,255,255) if last_label else (0,255,0), 2)
             display.present(bgr)
             count += 1
             if count % 60 == 0:

@@ -23,13 +23,13 @@ def main():
             raise RuntimeError("Expected exactly one BIT/HWH in this XSA")
         (output / "soc_camera_hdmi.bit").write_bytes(archive.read(bits[0]))
         (output / "soc_camera_hdmi.hwh").write_bytes(archive.read(hwhs[0]))
-    for name in ("camera_hdmi.py", "README.md"):
+    for name in ("camera_hdmi.py", "cnn_fpga.py", "run_camera_hdmi.sh", "README.md"):
         shutil.copyfile(HERE / name, output / name)
     manifest = {"source_xsa": str(args.xsa.resolve()),
                 "xsa_sha256": hashlib.sha256(args.xsa.read_bytes()).hexdigest(),
                 "files": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in output.iterdir() if p.name in
-                          ("soc_camera_hdmi.bit", "soc_camera_hdmi.hwh", "camera_hdmi.py", "README.md")}}
+                          ("soc_camera_hdmi.bit", "soc_camera_hdmi.hwh", "camera_hdmi.py", "cnn_fpga.py", "run_camera_hdmi.sh", "README.md")}}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     package = HERE / "camera_hdmi_pynq.zip"
     with ZipFile(package, "w", ZIP_DEFLATED) as archive:

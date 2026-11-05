@@ -7,7 +7,8 @@ not provide USB host support/UVC webcam capture:
 
 Pipeline: UVC webcam -> Linux V4L2/OpenCV -> ARM resize to 640x480 -> G/B/R
 display buffers in contiguous DDR -> custom MM2S VDMA -> video out -> RGB2DVI.
-This version displays live camera video; CNN inference is not enabled yet.
+By default this version displays live camera video. Add `--cnn` to enable the
+existing FPGA CNN and display its person/no-person classification.
 
 The custom overlay is used throughout. **Do not load base.bit** to display video:
 it would replace your CNN/SoC hardware. The program does not use
@@ -72,6 +73,19 @@ use that same environment under sudo or a root-owned PYNQ notebook.
 
 ## Run HDMI first, then camera
 
+Recommended CLI launcher (loads both the PYNQ Python and XRT environments):
+
+```bash
+sudo bash run_camera_hdmi.sh --bars --frames 180
+sudo bash run_camera_hdmi.sh --device /dev/video0 --fourcc MJPG --fps 15
+```
+
+If an earlier package reports `No Devices Found`, enter `sudo -i`, source
+`/etc/profile.d/pynq_venv.sh` and `/etc/profile.d/xrt_setup.sh`, then start a new
+Python process. Selecting the venv interpreter alone does not initialize XRT.
+Missing setup scripts or an empty `Device.devices` after sourcing require checking
+the board's runtime/kernel image; installing Python packages alone will not fix it.
+
 First verify the new Linux flow using bars (the command below assumes the board's
 system python3 includes PYNQ/OpenCV; use its actual interpreter otherwise):
 
@@ -95,6 +109,51 @@ Ctrl+C stops capture, resets the VDMA, disables VTC and frees buffers after the
 DMA is quiescent. Runtime prints frame count, measured FPS and VDMA status every
 60 frames. FPS is measured, not promised. The monitor refresh remains 60 Hz even
 when the camera produces only 15 FPS.
+
+## Run the existing FPGA CNN
+
+First fix `No Devices Found` and confirm that both bars and camera display work.
+Update the files on the board from the latest ZIP (it now includes `cnn_fpga.py`).
+In a board terminal:
+
+```bash
+cd /home/xilinx/camera_hdmi
+sudo bash run_camera_hdmi.sh --device /dev/video0 --fourcc MJPG --fps 15 --cnn --cnn-every 5
+```
+
+Alternatively enter `sudo -i`, source `/etc/profile.d/pynq_venv.sh` and
+`/etc/profile.d/xrt_setup.sh`, then run `python3 camera_hdmi.py ... --cnn` from
+that initialized shell. Do not start a Vitis standalone program alongside Linux.
+
+The client takes the untouched full camera frame before drawing overlay text,
+converts BGR to RGB, resizes using **Pillow bilinear** to 32x32 (matching training),
+packs the 3072 original RGB bytes MSB first into 768 MMIO words, and sends them
+to the existing CNN. The PL performs its own Q4.4 input mapping; Python does not
+normalize pixels a second time. HDMI remains 640x480.
+
+At `0x40004000`, the client validates bridge ID, claims OWNER as ARM (2), uploads
+the image, sets CONFIG=768 with Pico DMA off, writes START, polls DONE/fault,
+reads classification/cycles and releases ownership. A busy Pico is not evicted.
+Run **one ARM client at a time**; the hardware ownership ID cannot distinguish
+two Linux processes. Model weights are embedded in the bitstream, not loaded
+from a `.pth` file at runtime; using another bitstream can change the model.
+
+HDMI shows `LAST CNN: CO NGUOI` or `LAST CNN: KHONG CO NGUOI`. UART/terminal prints
+`CNN class=... cycles=... core_ms=...`. The core time uses 125 MHz and excludes
+image capture, resizing, MMIO upload, polling and display time. `--cnn-every 5`
+runs inference once per five displayed frames and retains the most recent label
+between inferences. Use `--cnn-every 1` for every frame at the cost of throughput.
+
+This is **whole-frame binary classification**, without boxes or confidence
+percentages. It uses the current RGB32 model; its known validation limitations
+remain. Tests of the Linux client use mocked registers; live CNN inference still
+requires board validation.
+
+On timeout/watchdog fault, the client raises an error and retains the lock rather
+than treating a stale result as valid. Acknowledge/reset with `--cnn-recover` on
+the next run (the program also reloads the overlay at startup). Recovery never
+steals Pico ownership. An actual MMIO bus fault may cause a Linux process signal
+instead of a Python exception; fix/reset the hardware before retrying.
 
 ## Hardware and buffer ownership
 
