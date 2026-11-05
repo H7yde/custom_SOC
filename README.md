@@ -15,6 +15,45 @@ Vivado project's IP repository path to its local location, and regenerate the
 block design output products. PS initialization and ARM application software
 are required to use USB/HDMI; programming the bitstream alone does not start video.
 
+## Nạp và chạy trên board Zynq PYNQ-Z2
+
+Hướng dẫn đầy đủ bằng tiếng Việt: **[Nạp lên board từng bước](firmware_arm/BOARD_SETUP.md)**.
+Hướng dẫn dùng board PYNQ-Z2 (`xc7z020clg400-1`), Vivado/Vitis 2025.2 theo
+project hiện tại; board Zynq khác cần cấu hình PS, chân và image riêng.
+
+| Mục tiêu | Cách nạp | File cần có |
+| --- | --- | --- |
+| Thử HDMI bằng thanh màu | JTAG + Vitis standalone | `.bit`, `.xsa`, PS7 init và `arm_test.elf` cùng thiết kế |
+| Webcam USB → HDMI → CNN | Boot SD PYNQ/Linux, rồi nạp overlay bằng Python | SD image PYNQ-Z2 và gói `camera_hdmi_pynq.zip` tự tạo |
+| Bật nguồn tự chạy thanh màu | SD standalone với `BOOT.BIN` | FSBL + `.bit` + `arm_test.elf` |
+| Gửi ảnh từ PC cho PicoRV32/CNN | Nạp `.bit`, giao tiếp UART PL | `firmware.hex` đã nhúng trong bitstream, USB–TTL 3,3 V |
+
+Trình tự cho lần đầu:
+
+1. Chuẩn bị cáp USB **PROG/UART**, nguồn, HDMI OUT và driver JTAG.
+2. Mở `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr`, cài IP
+   Digilent, kiểm tra clock 125 MHz và build bitstream.
+3. Export hardware **Include bitstream** thành `soc_top.xsa`.
+4. Kiểm tra HDMI qua Vitis với `arm_test`, hoặc boot SD PYNQ để chạy webcam.
+5. Với webcam, tạo gói trên Windows:
+
+   ```powershell
+   python firmware_arm/linux_camera_hdmi/prepare_package.py --xsa SOC_HUFLIT_2026_parallel_125MHz/soc_top.xsa
+   ```
+
+6. Chép ZIP lên board, giải nén rồi chạy trong terminal **Linux của board**:
+
+   ```bash
+   sudo bash run_camera_hdmi.sh --bars --frames 180
+   sudo bash run_camera_hdmi.sh --device /dev/video0 --fourcc MJPG --fps 15 --cnn --cnn-every 5
+   ```
+
+Lệnh bước 6 chạy từ thư mục đã giải nén. Xem hướng dẫn chi tiết để ghi SD,
+kết nối mạng, tạo platform Vitis, chọn file nạp và xử lý lỗi.
+Các file `.bit`, `.xsa`, `.bin` và thư mục build được `.gitignore` bỏ qua;
+sau khi clone cần build/export và tạo lại ZIP. Mỗi lần chạy Python launcher
+sẽ nạp overlay; ứng dụng chưa được cấu hình tự chạy khi bật nguồn.
+
 This repository contains the HUFLIT SoC FPGA project running directly from the PYNQ-Z2 H16 125 MHz clock. It integrates a PicoRV32 CPU, AXI/APB peripherals, a parallel/DDR interface, and a CNN accelerator for binary human/non-human classification.
 
 The CPU, BRAM, AXI, CNN, and DDR data logic share the 125 MHz core clock
@@ -22,22 +61,24 @@ The CPU, BRAM, AXI, CNN, and DDR data logic share the 125 MHz core clock
 125 MHz clock; the core no longer uses a frequency-conversion MMCM. UART keeps
 its configured baud rate using `CLK_FREQ=125000000`. SPI and I2C run their logic
 at 125 MHz and generate slower serial signals using their existing dividers.
-From the open Vivado project's Tcl Console, synthesize and route this version with:
-
-```tcl
-source [file join [get_property DIRECTORY [current_project]] .. firmware run_project_125MHz.tcl]
-```
-
-See `firmware/CLOCK_125MHZ.md` for validation results and external I/O limits.
+Build the combined design using the Vivado flow in
+[the board setup guide](firmware_arm/BOARD_SETUP.md#2-build-bitstream-và-export-xsa-trên-windows).
+The older `firmware/run_project_125MHz.tcl` checks the Pico/DDR clock topology
+and is not the build entry point for the combined USB/HDMI design.
+See [firmware/CLOCK_125MHZ.md](firmware/CLOCK_125MHZ.md) for core-clock details
+and external I/O limits.
 
 ## Project layout
 
-- SOC_HUFLIT_2026.xpr: Vivado project
-- SOC_HUFLIT_2026.srcs/sources_1/new: RTL source files
-- SOC_HUFLIT_2026.srcs/constrs_1/new: XDC constraints
-- SOC_HUFLIT_2026.srcs/sim_2/new: simulation testbenches
-- KQ: waveforms, images, and experiment results
-- Luanvan: thesis and design documents
+- `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr`: active Vivado project
+- `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.srcs/sources_1/new`: RTL and memory files
+- `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.srcs/constrs_1/new`: XDC constraints
+- `SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.srcs/sim_2/new`: CNN simulation testbench
+- `firmware`: PicoRV32 firmware, build tools and UART host client
+- `firmware_arm`: ARM driver, board setup and Linux webcam/HDMI application
+- `arm_test`: standalone ARM HDMI color-bar application
+- `soc_platform`: Vitis platform sources; generated outputs must be rebuilt
+- `CNN_RTL`: training, quantization, weights and RTL validation tools
 
 ## CNN architecture
 
@@ -194,11 +235,11 @@ It boots from the 4 KiB BRAM, reports over UART, and controls CNN baseline/DMA/p
 
 Open:
 
-    SOC_HUFLIT_2026.xpr
+    SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr
 
 Or use Tcl:
 
-    open_project SOC_HUFLIT_2026.xpr
+    open_project SOC_HUFLIT_2026_parallel_125MHz/SOC_HUFLIT_2026.xpr
 
 Recommended flow:
 
@@ -210,9 +251,13 @@ Recommended flow:
 6. Review timing and utilization reports.
 7. Generate Bitstream.
 
-The XDC contains the 50 MHz clock constraint:
+The active `soc_top.xdc` constrains the H16 PL clock to 125 MHz:
 
-    create_clock -period 20.000 -name sys_clk [get_ports clk]
+    create_clock -name clk_125m -period 8.000 -waveform {0.000 4.000} [get_ports clk]
+
+PS FCLK0 for the video/AXI path is 100 MHz. It is separate from the 125 MHz
+PicoRV32/CNN clock. Export a matching XSA after generating the bitstream;
+follow [BOARD_SETUP.md](firmware_arm/BOARD_SETUP.md) to load it on hardware.
 
 ## COCO 2017 training and export
 
@@ -236,9 +281,9 @@ weights preserve the RTL architecture and FC ROM order.
 - classification is valid only when STATUS.done is set.
 - If synthesis takes too long, verify that the sequential FSM core is used instead of the old task-based process_frame model.
 - After changing weights, run simulation before synthesis.
-- Vivado build and cache directories are included in this repository because the complete project was requested. They may be regenerated by Vivado.
+- Vivado build/cache directories and generated BIT/XSA files are ignored by Git and must be regenerated locally.
 
 ## Repository
 
-https://github.com/H7yde/Soc_Huflit_50MHz
+https://github.com/H7yde/custom_SOC
 

@@ -1,5 +1,41 @@
 # USB camera -> custom SoC HDMI (PYNQ-Z2 Linux)
 
+## Hướng dẫn nhanh bằng tiếng Việt
+
+Hướng dẫn từ lúc chuẩn bị board, build Vivado, export XSA, ghi SD đến nạp
+JTAG hoặc chạy Linux nằm tại
+**[Nạp lên board Zynq từng bước](https://github.com/H7yde/custom_SOC/blob/main/firmware_arm/BOARD_SETUP.md)**.
+Với webcam/CNN, thực hiện mục 2 rồi mục 4 trong hướng dẫn đó.
+
+1. **Windows:** build thiết kế `soc_top`, export XSA với **Include bitstream**.
+   Từ gốc repo, đóng gói bằng lệnh dưới đây (thay đường dẫn nếu XSA ở chỗ khác):
+
+   ```powershell
+   python firmware_arm/linux_camera_hdmi/prepare_package.py --xsa SOC_HUFLIT_2026_parallel_125MHz/soc_top.xsa
+   ```
+
+2. **Board:** boot thẻ SD PYNQ-Z2, kết nối Ethernet/SSH hoặc Jupyter, cắm màn
+   hình vào HDMI OUT và webcam vào USB HOST. Dừng phiên debug Vitis trước khi boot Linux.
+3. Upload `camera_hdmi_pynq.zip` vừa tạo lên board. Trong terminal **Linux của
+   board**, chuyển tới nơi upload và chạy:
+
+   ```bash
+   unzip camera_hdmi_pynq.zip -d camera_hdmi
+   cd camera_hdmi
+   sudo bash run_camera_hdmi.sh --bars --frames 180
+   ```
+
+4. Khi thanh màu đã hiển thị, chạy webcam và CNN:
+
+   ```bash
+   sudo bash run_camera_hdmi.sh --device /dev/video0 --fourcc MJPG --fps 15 --cnn --cnn-every 5
+   ```
+
+Đổi `/dev/video0` theo webcam thực tế. Launcher thiết lập môi trường PYNQ/XRT,
+ứng dụng tự nạp cặp `soc_camera_hdmi.bit`/`.hwh` vào PL. Giữ nguyên basename
+và dùng BIT/HWH lấy từ cùng XSA. Nhấn Ctrl+C để dừng; reboot xong cần chạy lại
+launcher. Các bước chi tiết và xử lý lỗi ở dưới.
+
 This is a **Linux/PYNQ application**, not a Vitis standalone ELF. The standalone
 color-bar application remains unchanged. AMD's Zynq standalone USB driver does
 not provide USB host support/UVC webcam capture:
@@ -19,10 +55,10 @@ it would replace your CNN/SoC hardware. The program does not use
 From the repository root:
 
 ```powershell
-python firmware_arm/linux_camera_hdmi/prepare_package.py
+python firmware_arm/linux_camera_hdmi/prepare_package.py --xsa SOC_HUFLIT_2026_parallel_125MHz/soc_top.xsa
 ```
 
-The script extracts both BIT and HWH from the same XSA used by `soc_platform`,
+The script extracts both BIT and HWH from the specified XSA,
 renames them to `soc_camera_hdmi.bit`/`.hwh`, copies the program/instructions,
 and writes a SHA256 manifest. Output is `camera_hdmi_pynq.zip` in this folder.
 It does not rebuild hardware. If hardware changes, export a matching new XSA and
@@ -114,10 +150,9 @@ when the camera produces only 15 FPS.
 
 First fix `No Devices Found` and confirm that both bars and camera display work.
 Update the files on the board from the latest ZIP (it now includes `cnn_fpga.py`).
-In a board terminal:
+In a board terminal, from the directory where the ZIP was extracted:
 
 ```bash
-cd /home/xilinx/camera_hdmi
 sudo bash run_camera_hdmi.sh --device /dev/video0 --fourcc MJPG --fps 15 --cnn --cnn-every 5
 ```
 

@@ -1,8 +1,25 @@
 # ARM CNN client
 
+## Hướng dẫn nạp board Zynq từng bước
+
+Xem **[BOARD_SETUP.md](BOARD_SETUP.md)** để chuẩn bị board PYNQ-Z2, build
+bitstream, export XSA và chọn cách nạp:
+
+- **JTAG/Vitis:** tạo/cập nhật `soc_platform`, build `arm_test.elf`, chọn BIT
+  và PS7 init đúng XSA, nạp lên `ps7_cortexa9_0`, kiểm tra UART và HDMI.
+- **SD PYNQ/Linux:** ghi image, kết nối mạng, tạo ZIP, chép sang board,
+  nạp overlay và chạy webcam/CNN theo từng lệnh.
+- **SD standalone:** ghép FSBL + BIT + ELF thành `BOOT.BIN` để tự chạy thanh màu.
+- **PicoRV32 UART:** nạp firmware trong BIT và gửi ảnh qua USB–TTL trên header.
+
+Build outputs không có sẵn sau clone. Tạo gói Linux từ XSA mới export bằng
+`python firmware_arm/linux_camera_hdmi/prepare_package.py --xsa PATH_TO_XSA`
+tại gốc repo, rồi xem các bước bên dưới.
+
 For live USB webcam video on the custom SoC HDMI, boot the PYNQ/Linux SD and see
 [linux_camera_hdmi/README.md](linux_camera_hdmi/README.md). The matching overlay
-and Python app are packaged in `linux_camera_hdmi/camera_hdmi_pynq.zip`.
+and Python app are packaged by the command above into
+`linux_camera_hdmi/camera_hdmi_pynq.zip`.
 This path uses Linux USB Host/UVC and does not run as a standalone Vitis ELF.
 
 For the HDMI-only color-bar test now installed in `arm_test/src/main.c`, see

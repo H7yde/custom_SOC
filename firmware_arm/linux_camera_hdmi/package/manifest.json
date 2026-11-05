@@ -4,7 +4,7 @@
   "files": {
     "camera_hdmi.py": "16652f98f90e9af0b44ef5caac53b1926d0725816cbdaf664eb38e077674fe51",
     "cnn_fpga.py": "7e0be0c24523b64cf4e47179a34e1f3fb9bc4a53cfbb7e93fb57dd0ca33f618d",
-    "README.md": "5d28976c5fc4c104ea2150c2c4f40758d73ed837dde5018b7f0118a9677b52e1",
+    "README.md": "984903ea53f5c0e724b5d92a04013f09e5a79f22dd230610ad493fa99d122003",
     "run_camera_hdmi.sh": "c0cb8f8424a525e963077191cf1431b5fc8a39c9bc2c5c6eb57dd669b5504b07",
     "soc_camera_hdmi.bit": "acd2e30932961f27a6701b1e0511ae17b5876227775bbe596e29ce2f1ac7d1ae",
     "soc_camera_hdmi.hwh": "c45e84e45f607417195fefca15b0948a3a94d0a64fdc94859018b0135239d4ab"
