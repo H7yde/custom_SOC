@@ -661,9 +661,11 @@ module soc_top #(
     assign {arm_cnn_rdata, axi_cnn_rdata} = bridge_s_rdata;
     assign {arm_cnn_rresp, axi_cnn_rresp} = bridge_s_rresp;
     assign {arm_cnn_rvalid, axi_cnn_rvalid} = bridge_s_rvalid;
+    wire cnn_recovery_resetn;
     cnn_axi_bridge #(.REQUIRE_LOCK(ENABLE_USB_HDMI)) u_arm_cnn_bridge (
         .clk(core_clk),
         .resetn(cnn_axi_resetn),
+        .cnn_resetn(cnn_recovery_resetn),
         .cnn_busy(cnn_control_busy),
         .s_awaddr({arm_cnn_awaddr, axi_m_awaddr}),
         .s_awvalid({arm_cnn_awvalid, (axi_m_awvalid & act_w_target[2])}),
@@ -703,7 +705,7 @@ module soc_top #(
 
     CNN u_cnn (
         .clk             (core_clk),
-        .rst_n           (cnn_axi_resetn),
+        .rst_n           (cnn_recovery_resetn),
         .control_busy    (cnn_control_busy),
 
         .S_AXI_AWADDR    (shared_cnn_awaddr),
@@ -741,6 +743,7 @@ module soc_top #(
         .BUFFER_WORDS(768),
         .TOTAL_WORDS (1536)
     ) u_cnn_memory (
+        .dma_resetn      (cnn_recovery_resetn),
         .clk             (core_clk),
         .rst_n           (core_resetn),
 

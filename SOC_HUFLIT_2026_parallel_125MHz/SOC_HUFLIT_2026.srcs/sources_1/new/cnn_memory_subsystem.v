@@ -20,6 +20,7 @@ module cnn_memory_subsystem #(
 )(
     input  wire        clk,
     input  wire        rst_n,
+    input  wire        dma_resetn,
 
     // CPU AXI4-Lite slave interface.
     input  wire [31:0] S_AXI_AWADDR,
@@ -80,7 +81,7 @@ module cnn_memory_subsystem #(
     assign S_AXI_BRESP   = 2'b00;
     assign S_AXI_BVALID  = bvalid_reg;
 
-    assign DMA_ARREADY   = !dma_rvalid_reg && !rvalid_reg && !S_AXI_ARVALID;
+    assign DMA_ARREADY   = dma_resetn && !dma_rvalid_reg && !rvalid_reg;
     assign S_AXI_ARREADY = !rvalid_reg && !dma_rvalid_reg && !DMA_ARVALID;
     assign S_AXI_RDATA   = rdata_reg;
     assign S_AXI_RRESP   = 2'b00;
@@ -138,7 +139,10 @@ module cnn_memory_subsystem #(
                 rvalid_reg <= 1'b0;
             end
 
-            if (DMA_ARVALID && DMA_ARREADY) begin
+            if (!dma_resetn) begin
+                dma_rvalid_reg <= 1'b0;
+                dma_rdata_reg <= 32'd0;
+            end else if (DMA_ARVALID && DMA_ARREADY) begin
                 dma_rvalid_reg <= 1'b1;
                 if ((dma_read_offset < MEM_BYTES) &&
                     (dma_read_index < TOTAL_WORDS))

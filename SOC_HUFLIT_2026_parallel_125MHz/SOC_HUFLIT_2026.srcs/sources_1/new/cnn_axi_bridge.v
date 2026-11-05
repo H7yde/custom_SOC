@@ -7,9 +7,12 @@
 // 0x40004F04: read bridge signature 0x434E4E42. Other reads go to CNN.
 // Ownership lasts across transactions, including upload and result retrieval.
 module cnn_axi_bridge #(
-    parameter REQUIRE_LOCK = 1
+    parameter REQUIRE_LOCK = 1,
+    parameter integer BUS_TIMEOUT_CYCLES = 4096,
+    parameter integer CNN_TIMEOUT_CYCLES = 12500000
 )(
     input wire clk, input wire resetn, input wire cnn_busy,
+    output wire cnn_resetn,
     input wire [63:0] s_awaddr, input wire [1:0] s_awvalid,
     output wire [1:0] s_awready,
     input wire [63:0] s_wdata, input wire [7:0] s_wstrb,
@@ -32,6 +35,15 @@ module cnn_axi_bridge #(
                READ_SEND=3, READ_RESPONSE=4;
     reg [2:0] state;
     reg [1:0] owner, next_slot;
+    // F08: sticky bit0=downstream bus timeout, bit1=inference timeout,
+    // bit8=reset in progress. Owner (or anyone when free) writes byte0=1
+    // to acknowledge/abort. Ownership survives reset; software releases it.
+    reg [1:0] fault;
+    reg [3:0] reset_count;
+    reg [31:0] bus_wait, busy_wait;
+    assign cnn_resetn = resetn && reset_count == 0;
+    wire bus_timeout = state != IDLE && bus_wait >= BUS_TIMEOUT_CYCLES-1;
+    wire cnn_timeout = cnn_busy && busy_wait >= CNN_TIMEOUT_CYCLES-1;
     reg active_lane, aw_sent, w_sent;
     reg [1:0] aw_pending, w_pending, ar_pending, writing, reading;
     reg [31:0] awaddr [0:1], wdata [0:1], araddr [0:1], rdata [0:1];
@@ -60,22 +72,24 @@ module cnn_axi_bridge #(
     assign s_bresp = {bresp[1], bresp[0]};
     assign s_rresp = {rresp[1], rresp[0]};
     assign s_rdata = {rdata[1], rdata[0]};
-    assign m_awvalid = resetn && state == WRITE_SEND && !aw_sent;
-    assign m_wvalid = resetn && state == WRITE_SEND && !w_sent;
-    assign m_bready = resetn && state == WRITE_RESPONSE;
-    assign m_arvalid = resetn && state == READ_SEND;
-    assign m_rready = resetn && state == READ_RESPONSE;
+    assign m_awvalid = cnn_resetn && state == WRITE_SEND && !aw_sent;
+    assign m_wvalid = cnn_resetn && state == WRITE_SEND && !w_sent;
+    assign m_bready = cnn_resetn && state == WRITE_RESPONSE;
+    assign m_arvalid = cnn_resetn && state == READ_SEND;
+    assign m_rready = cnn_resetn && state == READ_RESPONSE;
     wire selected_lane = grant_slot[1];
     wire [31:0] selected_addr = grant_slot[0] ? araddr[selected_lane] : awaddr[selected_lane];
     wire address_ok = selected_addr[31:12] == 20'h40004 && selected_addr[1:0] == 0;
     wire lock_addr = selected_addr[11:0] == 12'hF00;
     wire id_addr = selected_addr[11:0] == 12'hF04;
+    wire recovery_addr = selected_addr[11:0] == 12'hF08;
     wire permitted = owner == (selected_lane ? 2'd2 : 2'd1) ||
                      (!REQUIRE_LOCK && !selected_lane && owner == 0);
     always @(posedge clk) begin
         if (!resetn) begin
             state <= IDLE;
             owner <= 0;
+            fault <= 0; reset_count <= 0; bus_wait <= 0; busy_wait <= 0;
             next_slot <= 0;
             active_lane <= 0;
             aw_sent <= 0; w_sent <= 0;
@@ -89,6 +103,11 @@ module cnn_axi_bridge #(
                 bresp[lane] <= 0; rresp[lane] <= 0;
             end
         end else begin
+            if (reset_count != 0) reset_count <= reset_count - 1'b1;
+            if (state == IDLE || !cnn_resetn) bus_wait <= 0;
+            else bus_wait <= bus_wait + 1'b1;
+            if (!cnn_busy || !cnn_resetn) busy_wait <= 0;
+            else busy_wait <= busy_wait + 1'b1;
             for (lane=0; lane<2; lane=lane+1) begin
                 if (s_awvalid[lane] && s_awready[lane]) begin
                     awaddr[lane] <= s_awaddr[lane*32 +: 32];
@@ -111,21 +130,31 @@ module cnn_axi_bridge #(
                 end
             end
             case (state)
-                IDLE: if (grant_valid) begin
+                IDLE: if (grant_valid && !(cnn_resetn && cnn_timeout)) begin
                     active_lane <= selected_lane;
                     next_slot <= grant_slot + 2'd1;
                     if (!grant_slot[0]) begin
                         aw_pending[selected_lane] <= 0;
                         w_pending[selected_lane] <= 0;
                         writing[selected_lane] <= 1;
-                        if (!address_ok || id_addr || (!lock_addr && !permitted)) begin
+                        if (!address_ok || id_addr ||
+                            (!lock_addr && !recovery_addr && (!permitted || fault != 0 || !cnn_resetn)) ||
+                            (recovery_addr && owner != 0 && !permitted)) begin
                             bresp[selected_lane] <= 2'b10;
                             s_bvalid[selected_lane] <= 1;
+                        end else if (recovery_addr) begin
+                            if (wstrb[selected_lane][0] && wdata[selected_lane][7:0] == 1) begin
+                                reset_count <= 8;
+                                fault <= 0;
+                                busy_wait <= 0;
+                            end
+                            bresp[selected_lane] <= 0;
+                            s_bvalid[selected_lane] <= 1;
                         end else if (lock_addr) begin
-                            if (wstrb[selected_lane][0] && !cnn_busy) begin
-                                if (wdata[selected_lane] == 1 && owner == 0)
+                            if (wstrb[selected_lane][0] && !cnn_busy && cnn_resetn) begin
+                                if (wdata[selected_lane][7:0] == 1 && owner == 0)
                                     owner <= selected_lane ? 2'd2 : 2'd1;
-                                if (wdata[selected_lane] == 0 && permitted)
+                                if (wdata[selected_lane][7:0] == 0 && permitted)
                                     owner <= 0;
                             end
                             bresp[selected_lane] <= 0;
@@ -140,10 +169,12 @@ module cnn_axi_bridge #(
                     end else begin
                         ar_pending[selected_lane] <= 0;
                         reading[selected_lane] <= 1;
-                        if (!address_ok || lock_addr || id_addr) begin
+                        if (!address_ok || lock_addr || id_addr || recovery_addr || fault != 0 || !cnn_resetn) begin
                             rdata[selected_lane] <= !address_ok ? 0 :
-                                lock_addr ? {23'd0, cnn_busy, 6'd0, owner} : 32'h434E4E42;
-                            rresp[selected_lane] <= address_ok ? 2'b00 : 2'b10;
+                                lock_addr ? {23'd0, cnn_busy, 6'd0, owner} :
+                                id_addr ? 32'h434E4E42 :
+                                recovery_addr ? {23'd0, !cnn_resetn, 6'd0, fault} : 0;
+                            rresp[selected_lane] <= address_ok && (lock_addr || id_addr || recovery_addr) ? 2'b00 : 2'b10;
                             s_rvalid[selected_lane] <= 1;
                         end else begin
                             m_araddr <= araddr[selected_lane];
@@ -171,6 +202,23 @@ module cnn_axi_bridge #(
                 end
                 default: state <= IDLE;
             endcase
+            // Reset the downstream slave and its DMA endpoint together. Keep
+            // upstream queues/responses alive, so accepted requests complete.
+            if (cnn_resetn && (bus_timeout || cnn_timeout)) begin
+                reset_count <= 8;
+                fault <= fault | {cnn_timeout, bus_timeout};
+                bus_wait <= 0; busy_wait <= 0;
+                if (state == WRITE_SEND || state == WRITE_RESPONSE) begin
+                    bresp[active_lane] <= 2'b10;
+                    s_bvalid[active_lane] <= 1;
+                end
+                if (state == READ_SEND || state == READ_RESPONSE) begin
+                    rresp[active_lane] <= 2'b10;
+                    rdata[active_lane] <= 0;
+                    s_rvalid[active_lane] <= 1;
+                end
+                state <= IDLE;
+            end
         end
     end
 endmodule

@@ -1,0 +1,7 @@
+[
+{
+  "directory": "D:/LAB/custom_SOC-main/arm_test/build",
+  "command": "D:\\Vivado_data\\2025.2\\Vitis\\gnu\\aarch32\\nt\\gcc-arm-none-eabi\\bin\\arm-none-eabi-gcc.exe -ID:/LAB/custom_SOC-main/arm_test/src -isystem D:/LAB/custom_SOC-main/soc_platform/export/soc_platform/sw/standalone_ps7_cortexa9_0/include -isystem D:/Vivado_data/2025.2/gnu/aarch32/nt/gcc-arm-none-eabi/x86_64-oesdk-mingw32/usr/lib/arm-xilinx-eabi/gcc/arm-xilinx-eabi/13.3.0/include -isystem D:/Vivado_data/2025.2/gnu/aarch32/nt/gcc-arm-none-eabi/x86_64-oesdk-mingw32/usr/lib/arm-xilinx-eabi/gcc/arm-xilinx-eabi/13.3.0/include-fixed -isystem D:/Vivado_data/2025.2/Vitis/gnu/aarch32/nt/gcc-arm-none-eabi/aarch32-xilinx-eabi/usr/include  -DSDT -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard  -MMD -MP -specs=D:/LAB/custom_SOC-main/soc_platform/export/soc_platform/sw/standalone_ps7_cortexa9_0/Xilinx.spec -ID:/LAB/custom_SOC-main/soc_platform/export/soc_platform/sw/standalone_ps7_cortexa9_0/include -Wall -Wextra      -O0  -g3     -U__clang__ -o CMakeFiles\\arm_test.elf.dir\\main.c.obj -c D:\\LAB\\custom_SOC-main\\arm_test\\src\\main.c",
+  "file": "D:\\LAB\\custom_SOC-main\\arm_test\\src\\main.c"
+}
+]

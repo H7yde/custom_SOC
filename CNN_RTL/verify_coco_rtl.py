@@ -14,7 +14,8 @@ import numpy as np
 from cnn_model import integer_reference, read_mem_weights, WEIGHT_FILES
 
 HERE = Path(__file__).resolve().parent
-RTL = HERE.parent / "SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/sources_1/new/cnn_docx_reference.v"
+from project_paths import design_directory
+RTL = design_directory() / "cnn_docx_reference.v"
 
 TESTBENCH = r'''
 `timescale 1ns/1ps

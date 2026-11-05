@@ -43,7 +43,13 @@ static int cnn_claim(void)
     uint32_t timeout = 200000u;
     do {
         CNN_BRIDGE_OWNER = 1;
-        if ((CNN_BRIDGE_OWNER & 3u) == 1u) return 1;
+        if ((CNN_BRIDGE_OWNER & 3u) == 1u) {
+            if (CNN_BRIDGE_RECOVERY & 0x103u) {
+                uart_puts("ERROR CNN FAULT; USE r TO RECOVER\r\n");
+                return 0;
+            }
+            return 1;
+        }
     } while (--timeout);
     uart_puts("ERROR CNN OWNED BY ARM\r\n");
     return 0;
@@ -53,6 +59,26 @@ static void cnn_release(void)
 {
     /* Hardware ignores release while inference is still busy. */
     CNN_BRIDGE_OWNER = 0;
+}
+
+static void cnn_recover(void)
+{
+    uint32_t left = 200000u;
+    CNN_BRIDGE_OWNER = 1;
+    if ((CNN_BRIDGE_OWNER & 3u) != 1u) {
+        uart_puts("ERROR CNN OWNED BY ARM\r\n");
+        return;
+    }
+    CNN_BRIDGE_RECOVERY = 1;
+    do {
+        if (!(CNN_BRIDGE_RECOVERY & 0x103u)) {
+            loaded_buffers = 0;
+            cnn_release();
+            uart_puts("RECOVERED; RELOAD FRAME\r\n");
+            return;
+        }
+    } while (--left);
+    uart_puts("ERROR RECOVERY TIMEOUT\r\n");
 }
 
 static int boot_test(void)
@@ -80,11 +106,15 @@ static int cnn_run(void)
     fw_report.stage = 2;
     CNN_CONTROL = 1;
     do {
+        if (CNN_BRIDGE_RECOVERY & 0x103u) {
+            uart_puts("ERROR CNN WATCHDOG; USE r TO RECOVER\r\n");
+            return 0;
+        }
         fw_report.status = CNN_STATUS;
         if (fw_report.status & CNN_DONE) break;
     } while (--timeout);
     if (!timeout) {
-        uart_puts("ERROR CNN TIMEOUT; RESET REQUIRED\r\n");
+        uart_puts("ERROR CNN TIMEOUT; USE r TO RECOVER\r\n");
         return 0;
     }
     fw_report.classification = CNN_RESULT & 1u;
@@ -187,8 +217,9 @@ int main(void)
         uart_puts("READY\r\n");
         do { command = uart_getc(2000000u); } while (command < 0);
         if (command == '\r' || command == '\n') continue;
+        if (command == 'r') { cnn_recover(); continue; }
         if (command == '?') {
-            uart_puts("B: baseline; 0/1: DMA upload (3072 RGB bytes); P: pingpong; z: smoke\r\n");
+            uart_puts("B: baseline; 0/1: DMA upload; P: pingpong; z: smoke; r: recover\r\n");
             continue;
         }
         if (command != 'B' && command != '0' && command != '1' &&

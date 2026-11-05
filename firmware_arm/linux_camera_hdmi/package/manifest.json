@@ -1,0 +1,10 @@
+{
+  "source_xsa": "D:\\LAB\\custom_SOC-main\\soc_platform\\export\\soc_platform\\hw\\soc_top.xsa",
+  "xsa_sha256": "c5421a90e36908c8e28f0fb831286ea44f1629c1917c3ae550c3fe742f7404f0",
+  "files": {
+    "camera_hdmi.py": "624d2a16ad1bb8c277e85c1e33b76e6be5830ccd22c57d26b3d845103d79ec08",
+    "README.md": "955d851dea40199176537e126ff9cc900f402b6a98595110cc9d0ad5cba5cf7a",
+    "soc_camera_hdmi.bit": "acd2e30932961f27a6701b1e0511ae17b5876227775bbe596e29ce2f1ac7d1ae",
+    "soc_camera_hdmi.hwh": "c45e84e45f607417195fefca15b0948a3a94d0a64fdc94859018b0135239d4ab"
+  }
+}

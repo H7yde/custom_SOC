@@ -1,3 +1,4 @@
+source [file join [file dirname [file normalize [info script]]] project_paths.tcl]
 # Source from the Tcl Console of the open SoC project.
 # Create fresh runs in that project and leave the routed timing report open.
 namespace eval soc_run125 {
@@ -15,7 +16,7 @@ namespace eval soc_run125 {
         variable repo
         variable output
         variable status_file
-        set expected [file normalize [file join $repo SOC_HUFLIT_2026_parallel_50MHz]]
+        set expected [file normalize [file join [soc_paths::project]]]
         if {[llength [current_project -quiet]] != 1 ||
             ![string equal -nocase [file normalize [get_property DIRECTORY [current_project]]] $expected]} {
             error {Open the original SOC_HUFLIT_2026 project before sourcing this script.}

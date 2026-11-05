@@ -13,6 +13,7 @@ module tb_arm_cnn_bridge;
     wire [3:0] cs;
     wire av,ay,wv,wy,bv,by,rv,ry,rrv,rry,busy;
     wire [1:0] br,rr;
+    wire cnn_resetn;
     // Actual generated AMD asynchronous AXI converter: ARM 100 MHz, CNN 125 MHz.
     wire [1:0][31:0] cdc_awaddr;
     assign cdc_awaddr[0] = awaddr[0];
@@ -92,8 +93,12 @@ module tb_arm_cnn_bridge;
         .s_axi_rready(rready[1]),
         .m_axi_rready(cdc_rready[1])
     );
+    `ifdef RECOVERY_TEST
+    cnn_axi_bridge #(.BUS_TIMEOUT_CYCLES(128), .CNN_TIMEOUT_CYCLES(2048)) dut(
+`else
     cnn_axi_bridge dut(
-        .clk(clk),.resetn(resetn),.cnn_busy(busy),
+`endif
+        .clk(clk),.resetn(resetn),.cnn_busy(busy),.cnn_resetn(cnn_resetn),
         .s_awaddr(cdc_awaddr),.s_awvalid(cdc_awvalid),.s_awready(cdc_awready),
         .s_wdata(cdc_wdata),.s_wstrb(cdc_wstrb),.s_wvalid(cdc_wvalid),.s_wready(cdc_wready),
         .s_bresp(cdc_bresp),.s_bvalid(cdc_bvalid),.s_bready(cdc_bready),
@@ -106,7 +111,7 @@ module tb_arm_cnn_bridge;
         .m_rdata(rd),.m_rresp(rr),.m_rvalid(rrv),.m_rready(rry)
     );
     CNN cnn(
-        .clk(clk),.rst_n(resetn),.control_busy(busy),
+        .clk(clk),.rst_n(cnn_resetn),.control_busy(busy),
         .S_AXI_AWADDR(ca),.S_AXI_AWVALID(av),.S_AXI_AWREADY(ay),
         .S_AXI_WDATA(cd),.S_AXI_WSTRB(cs),.S_AXI_WVALID(wv),.S_AXI_WREADY(wy),
         .S_AXI_BRESP(br),.S_AXI_BVALID(bv),.S_AXI_BREADY(by),
@@ -210,12 +215,18 @@ module tb_arm_cnn_bridge;
             $display("ARM_CNN_IMAGE_PASS image=%0d class=%0d",image_index,expected);
         end
     endtask
+    `include "recovery_cases.svh"
     reg [31:0] temp0,temp1;
     integer i;
     initial begin
         $readmemh("bridge_images.mem",images);
         repeat(8) @(negedge clk); resetn=1;
         expect_reg(0,32'h40004f04,32'h434e4e42);
+`ifdef RECOVERY_TEST
+        recovery_tests();
+        $display("ARM_CNN_RECOVERY_TEST_PASS");
+        $finish;
+`endif
         // Unlocked writes are denied; malformed addresses never reach CNN.
         write_axi(1,32'h40004fe4,123,15,0,2);
         read_axi(1,32'h40005000,temp0,2);

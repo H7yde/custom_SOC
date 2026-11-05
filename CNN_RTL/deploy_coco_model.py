@@ -9,7 +9,8 @@ import shutil
 from cnn_model import WEIGHT_FILES, read_mem_weights
 
 HERE = Path(__file__).resolve().parent
-DESIGN = HERE.parent / "SOC_HUFLIT_2026_parallel_50MHz/SOC_HUFLIT_2026.srcs/sources_1/new"
+from project_paths import design_directory
+DESIGN = design_directory()
 
 
 def sha(path):

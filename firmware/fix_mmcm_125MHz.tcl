@@ -1,7 +1,8 @@
+source [file join [file dirname [file normalize [info script]]] project_paths.tcl]
 # Source in the OPEN Vivado project's Tcl Console. This updates the live
 # session too, preventing its stale 100 MHz settings from overwriting the XPR.
 set fix125_repo [file dirname [file dirname [file normalize [info script]]]]
-set fix125_project [file join $fix125_repo SOC_HUFLIT_2026_parallel_50MHz]
+set fix125_project [file join [soc_paths::project]]
 set fix125_runs [file join $fix125_project SOC_HUFLIT_2026.runs]
 set fix125_checkpoint [file join $fix125_runs impl_h16_core125_2 soc_top_postroute_physopt.dcp]
 

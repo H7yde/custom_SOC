@@ -96,6 +96,7 @@ module tb_CNN;
         .TOTAL_WORDS(1536)
     ) mem_dut (
         .clk(clk), .rst_n(rst_n),
+        .dma_resetn(rst_n),
         .S_AXI_AWADDR(mem_awaddr), .S_AXI_AWVALID(mem_awvalid), .S_AXI_AWREADY(mem_awready),
         .S_AXI_WDATA(mem_wdata), .S_AXI_WSTRB(mem_wstrb), .S_AXI_WVALID(mem_wvalid), .S_AXI_WREADY(mem_wready),
         .S_AXI_BRESP(mem_bresp), .S_AXI_BVALID(mem_bvalid), .S_AXI_BREADY(mem_bready),

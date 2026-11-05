@@ -14,8 +14,8 @@ PicoRV32 decoded CNN AXI -> lane 0 -------+-> existing CNN slave (125 MHz)
 The bridge buffers AW and W independently and holds read/write responses under
 backpressure. It serializes CNN transactions with round-robin arbitration.
 An ownership register protects the entire image upload/inference/result sequence,
-not just individual AXI transactions. CNN and bridge share the synchronized
-`cnn_axi_aresetn`; both sides of the CDC get reset when SW0/core reset or PS/video
+not just individual AXI transactions. The bridge uses synchronized
+`cnn_axi_aresetn`; CNN uses its derived `cnn_recovery_resetn`. Both sides of the CDC get reset when SW0/core reset or PS/video
 reset asserts. The reset controllers release reset in their own clock domains.
 
 With hardware `ENABLE_USB_HDMI=1`, PS clocks/reset must be initialized before
@@ -30,6 +30,7 @@ Standalone simulation `ENABLE_USB_HDMI=0` bypasses the PS clock/reset dependency
 | `0x40004000..0x40004BFC` | 768 image words; write only |
 | `0x40004F00` | Ownership: read bits 1:0 = 0 free, 1 Pico, 2 ARM; bit 8 = CNN busy/pending start |
 | `0x40004F04` | Read-only bridge ID `0x434E4E42` (`CNNB`) |
+| `0x40004F08` | Recovery: read sticky bit 0 bus timeout, bit 1 CNN timeout, bit 8 reset active; write byte 0 = 1 to abort/reset/acknowledge |
 | `0x40004FE4` | CONFIG: write 768 for ARM baseline mode (DMA disabled) |
 | `0x40004FE8` | Last inference cycle count |
 | `0x40004FF4` | Result bit 0: classification |
@@ -65,9 +66,27 @@ image window. This change does not make CNN DMA read physical ARM DDR.
 - The driver returns a classification and cycles. It does not initialize USB,
   VTC, VDMA or HDMI. It is a driver source, not a complete ARM bootable ELF.
 
-On inference timeout the lock is retained to prevent overwriting active CNN
-memory. Recover by resetting/reinitializing the system while idle, not by forcing
-another image upload. Poll limits are transaction counts, not milliseconds.
+On watchdog timeout the bridge resets CNN and only the DMA response channel of
+the local memory subsystem for eight core clocks. CPU memory transactions, PS7,
+CDC and HDMI are not reset. Outstanding downstream AXI transactions terminate
+with SLVERR; upstream response buffers survive reset. Sticky fault blocks further
+CNN accesses with SLVERR until acknowledged; OWNER/ID/RECOVERY remain accessible.
+Ownership is retained. Only the owner (or a client when free) may request recovery.
+Software must wait for bit 8 to clear, then reload all image/configuration data.
+
+Default thresholds at 125 MHz: `BUS_TIMEOUT_CYCLES=4096` (32.768 us per forwarded
+transaction), `CNN_TIMEOUT_CYCLES=12500000` (100 ms continuously busy). These are
+parameters in `cnn_axi_bridge.v`. They do not time upstream BREADY/RREADY stalls.
+Clocks must continue running. This does not recover a dead PS, stopped clock,
+upstream interconnect/CDC failure, or an initiator that never sends its missing
+AW/W half. A future external DDR endpoint needs its own safe reset/drain scheme.
+
+ARM: -4 software timeout or -5 watchdog fault -> call `arm_cnn_recover(limit)`.
+It acknowledges/reset, waits, then releases the lock; it refuses to abort a Pico
+owner. Poll limits count MMIO iterations, not milliseconds. An AXI SLVERR can raise
+a Cortex-A9 Data Abort; install a platform exception handler for bus-fault tests.
+The C driver does not catch CPU exceptions. Pico UART: send lowercase `r` to abort
+its own job/recover, wait for `RECOVERED; RELOAD FRAME`, then upload a new frame.
 
 ## Apply/build
 
@@ -105,6 +124,8 @@ bridge source in a stale generated run; it is verified separately by
 ```powershell
 python fpga_usb_hdmi/sim/run_bridge_test.py
 python fpga_usb_hdmi/sim/run_bridge_test.py --firmware-boot
+python fpga_usb_hdmi/sim/run_bridge_test.py --recovery
+python fpga_usb_hdmi/sim/run_bridge_test.py --memory-recovery
 ```
 
 The first test uses the actual generated AMD clock converter at 100/125 MHz,

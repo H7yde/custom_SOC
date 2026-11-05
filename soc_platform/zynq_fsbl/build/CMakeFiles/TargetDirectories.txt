@@ -1,0 +1,4 @@
+D:/LAB/custom_SOC-main/soc_platform/zynq_fsbl/build/CMakeFiles/fsbl.elf.dir
+D:/LAB/custom_SOC-main/soc_platform/zynq_fsbl/build/CMakeFiles/print_build_info.dir
+D:/LAB/custom_SOC-main/soc_platform/zynq_fsbl/build/CMakeFiles/edit_cache.dir
+D:/LAB/custom_SOC-main/soc_platform/zynq_fsbl/build/CMakeFiles/rebuild_cache.dir

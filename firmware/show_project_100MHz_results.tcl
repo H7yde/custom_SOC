@@ -1,8 +1,9 @@
+source [file join [file dirname [file normalize [info script]]] project_paths.tcl]
 # Open the existing 100 MHz implementation without launching another run.
 set show100_repo [file dirname [file dirname [file normalize [info script]]]]
 if {[llength [current_project -quiet]] != 1 ||
     ![string equal -nocase [file normalize [get_property DIRECTORY [current_project]]] \
-        [file normalize [file join $show100_repo SOC_HUFLIT_2026_parallel_50MHz]]]} {
+        [file normalize [file join [soc_paths::project]]]]} {
     error {Open the original SOC_HUFLIT_2026 project first.}
 }
 set show100_run [get_runs -quiet impl_100MHz]

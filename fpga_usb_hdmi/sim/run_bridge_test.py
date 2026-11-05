@@ -11,12 +11,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--vivado-bin", type=Path, default=Path("D:/Vivado_data/2025.2/Vivado/bin"))
     parser.add_argument("--firmware-boot", action="store_true")
+    parser.add_argument("--recovery", action="store_true")
+    parser.add_argument("--memory-recovery", action="store_true")
     args = parser.parse_args()
+    if sum((args.recovery, args.firmware_boot, args.memory_recovery)) > 1:
+        parser.error("Choose only one test mode")
     projects = list(ROOT.glob("SOC_HUFLIT_2026_parallel_*/SOC_HUFLIT_2026.xpr"))
     if len(projects) != 1:
         raise RuntimeError("Expected one SoC project")
     rtl = projects[0].parent / "SOC_HUFLIT_2026.srcs/sources_1/new"
-    work = ROOT / "fpga_usb_hdmi/build_check" / ("arm_cnn_firmware_boot" if args.firmware_boot else "arm_cnn_sim")
+    work = ROOT / "fpga_usb_hdmi/build_check" / ("cnn_dma_recovery" if args.memory_recovery else "arm_cnn_firmware_boot" if args.firmware_boot else "arm_cnn_recovery" if args.recovery else "arm_cnn_sim")
     work.mkdir(parents=True, exist_ok=True)
     for name in ("conv1_rgb_weight.mem", "conv2_weight.mem", "conv3_weight.mem", "fc_weight.mem"):
         shutil.copyfile(rtl / name, work / name)
@@ -46,8 +50,15 @@ def main():
         top = "tb_arm_cnn_firmware_boot"
         snapshot = "arm_cnn_firmware_boot"
         passed = "ARM_CNN_FIRMWARE_BOOT_PASS"
+    if args.recovery:
+        passed = "ARM_CNN_RECOVERY_TEST_PASS"
+    if args.memory_recovery:
+        sources = [rtl / "cnn_memory_subsystem.v", args.vivado_bin.parent / "data/verilog/src/glbl.v"]
+        top = snapshot = "tb_cnn_dma_recovery"
+        passed = "CNN_DMA_RECOVERY_PASS"
+    defines = ["-d", "RECOVERY_TEST"] if args.recovery else []
     commands = [
-        [args.vivado_bin / "xvlog.bat", "--sv", *sources, Path(__file__).with_name(top + ".sv")],
+        [args.vivado_bin / "xvlog.bat", "--sv", "-i", Path(__file__).parent, *defines, *sources, Path(__file__).with_name(top + ".sv")],
         [args.vivado_bin / "xelab.bat", top, "glbl", "-s", snapshot, "-L", "axi_clock_converter_v2_1_35", "-L", "axi_infrastructure_v1_1_0", "-L", "xpm", "-L", "unisims_ver"],
         [args.vivado_bin / "xsim.bat", snapshot, "-runall", "-log", "simulate.log"],
     ]

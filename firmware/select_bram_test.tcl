@@ -1,9 +1,10 @@
+source [file join [file dirname [file normalize [info script]]] project_paths.tcl]
 # Run in the OPEN Vivado project's Tcl Console, then relaunch simulation.
 # Selects the BRAM-only firmware and its matching testbench.
 set bram_fw_dir [file dirname [file normalize [info script]]]
 set bram_repo [file dirname $bram_fw_dir]
 set bram_image [file join $bram_fw_dir bram_test.hex]
-set bram_design_image [file join $bram_repo SOC_HUFLIT_2026_parallel_50MHz \
+set bram_design_image [file join [soc_paths::project] \
     SOC_HUFLIT_2026.srcs sources_1 new firmware.hex]
 set bram_tb [file join $bram_fw_dir sim tb_bram_firmware.v]
 if {![file exists $bram_image]} {

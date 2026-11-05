@@ -204,22 +204,30 @@ module CNN (
                         if (wstrb_reg[1]) frame_mem[write_offset[11:2]][15:8]  <= wdata_reg[15:8];
                         if (wstrb_reg[2]) frame_mem[write_offset[11:2]][23:16] <= wdata_reg[23:16];
                         if (wstrb_reg[3]) frame_mem[write_offset[11:2]][31:24] <= wdata_reg[31:24];
-                        baseline_write_counter <= baseline_write_counter + 32'd1;
+                        if (|wstrb_reg)
+                            baseline_write_counter <= baseline_write_counter + 32'd1;
                     end
                 end
 
                 // Runtime configuration registers.
-                if (write_offset == 12'hFE0)
-                    dma_base_addr_reg <= wdata_reg;
+                if (write_offset == 12'hFE0) begin
+                    if (wstrb_reg[0]) dma_base_addr_reg[7:0] <= wdata_reg[7:0];
+                    if (wstrb_reg[1]) dma_base_addr_reg[15:8] <= wdata_reg[15:8];
+                    if (wstrb_reg[2]) dma_base_addr_reg[23:16] <= wdata_reg[23:16];
+                    if (wstrb_reg[3]) dma_base_addr_reg[31:24] <= wdata_reg[31:24];
+                end
                 if (write_offset == 12'hFE4) begin
-                    frame_words_reg     <= wdata_reg[9:0];
-                    dma_enable_reg      <= wdata_reg[16];
-                    pingpong_enable_reg <= wdata_reg[17];
-                    buffer_select_reg   <= wdata_reg[18];
+                    if (wstrb_reg[0]) frame_words_reg[7:0] <= wdata_reg[7:0];
+                    if (wstrb_reg[1]) frame_words_reg[9:8] <= wdata_reg[9:8];
+                    if (wstrb_reg[2]) begin
+                        dma_enable_reg      <= wdata_reg[16];
+                        pingpong_enable_reg <= wdata_reg[17];
+                        buffer_select_reg   <= wdata_reg[18];
+                    end
                 end
 
                 // CONTROL: write bit 0 to start one frame.
-                if (write_offset == 12'hFFC && wdata_reg[0] && !busy_reg) begin
+                if (write_offset == 12'hFFC && wstrb_reg[0] && wdata_reg[0] && !control_busy) begin
                     start_pending <= 1'b1;
                     done_reg <= 1'b0;
                 end

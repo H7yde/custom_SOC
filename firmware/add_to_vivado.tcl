@@ -1,6 +1,7 @@
+source [file join [file dirname [file normalize [info script]]] project_paths.tcl]
 # Run in the Tcl Console of the OPEN project after `py firmware/build.py`.
 set fw_repo [file dirname [file dirname [file normalize [info script]]]]
-set fw_image [file join $fw_repo SOC_HUFLIT_2026_parallel_50MHz \
+set fw_image [file join [soc_paths::project] \
     SOC_HUFLIT_2026.srcs sources_1 new firmware.hex]
 if {![file exists $fw_image]} { error "Build firmware first: py firmware/build.py" }
 foreach fw_rtl_name {picorv32_axi4_bram_adapter.v axi4_bram_slave.v} {

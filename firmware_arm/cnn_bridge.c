@@ -8,6 +8,26 @@ static void barrier(void)
     __asm__ volatile("" ::: "memory");
 #endif
 }
+int arm_cnn_recover(uint32_t poll_limit)
+{
+    uint32_t status;
+    if (!poll_limit) return -1;
+    if (REG(0xF04) != 0x434E4E42u) return -2;
+    REG(0xF00) = 1;
+    barrier();
+    if ((REG(0xF00) & 3u) != 2u) return -3;
+    REG(0xF08) = 1; /* Abort/reset, clear sticky faults; keep ownership. */
+    barrier();
+    do {
+        status = REG(0xF08);
+        if (!(status & 0x103u)) {
+            REG(0xF00) = 0;
+            barrier();
+            return 0;
+        }
+    } while (--poll_limit);
+    return -4;
+}
 int arm_cnn_classify_rgb(const uint8_t *rgb, size_t length,
                          uint32_t poll_limit, struct arm_cnn_result *result)
 {
@@ -25,6 +45,7 @@ int arm_cnn_classify_rgb(const uint8_t *rgb, size_t length,
         }
     }
     if (!left) return -3;
+    if (REG(0xF08) & 0x103u) return -5;
     /* The stream unpacks the most significant byte first. Do not memcpy
      * little-endian RGB bytes directly into the AXI word aperture. */
     for (i = 0; i < length; i += 4) {
@@ -38,10 +59,12 @@ int arm_cnn_classify_rgb(const uint8_t *rgb, size_t length,
     /* CNN clears DONE before completing the START write response. Device
      * memory ordering plus the barrier prevents polling an older DONE. */
     for (left = poll_limit; left; --left) {
+        if (REG(0xF08) & 0x103u) return -5;
         status = REG(0xFF8);
         if ((status & 3u) == 2u) break;
     }
     if (!left) return -4;
+    if (REG(0xF08) & 0x103u) return -5;
     result->status = status;
     result->classification = REG(0xFF4) & 1u;
     result->cycles = REG(0xFE8);
